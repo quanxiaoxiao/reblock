@@ -1,0 +1,76 @@
+{
+  "name": "reblock",
+  "version": "1.0.0",
+  "description": "Resource Block - Block storage and streaming media services",
+  "main": "dist/server.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-github-username/reblock.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-github-username/reblock/issues"
+  },
+  "keywords": [
+    "block-storage",
+    "deduplication",
+    "content-addressable",
+    "streaming",
+    "media",
+    "encryption",
+    "aes-256",
+    "mongodb",
+    "hono"
+  ],
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsc --watch & npx nodemon dist/server.js",
+    "lint": "eslint src/**/*.ts scripts/**/*.mjs",
+    "lint:fix": "eslint src/**/*.ts scripts/**/*.mjs --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:hurl": "HURL_ENV=local sh ./test-hurl.sh",
+    "test:mp4": "node scripts/test-mp4.mjs",
+    "test:mp4:browser": "node scripts/test-mp4-browser.mjs",
+    "test:e2e": "node scripts/e2e-test.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "cleanup": "node scripts/cleanup.mjs",
+    "logs:analyze": "node scripts/logs-analyze.mjs",
+    "resource:corrupt": "node scripts/resource-corrupt.mjs",
+    "resource:report": "node scripts/resource-report.mjs",
+    "resource:test": "node scripts/resource-test-suite.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.9",
+    "@hono/zod-openapi": "^1.2.2",
+    "@scalar/api-reference": "^1.44.26",
+    "@scalar/hono-api-reference": "^0.9.45",
+    "@types/mongoose": "^5.11.96",
+    "dotenv": "^17.3.1",
+    "file-type": "^21.3.0",
+    "hono": "^4.12.2",
+    "mongoose": "^9.2.2",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.3.0",
+    "@types/supertest": "^7.2.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^10.0.2",
+    "globals": "^17.3.0",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.2.2",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.56.1",
+    "vitest": "^4.0.18"
+  }
+}
