@@ -10,6 +10,7 @@ import entryRouter from './routes/entryRouter';
 import resourceRouter from './routes/resourceRouter';
 import uploadRouter from './routes/uploadRouter';
 import errorRouter from './routes/errorRouter';
+import migrationRouter from './routes/migrationRouter';
 import { errorHandler } from './routes/middlewares/errorHandler';
 import { captureRequestBody } from './routes/middlewares/requestCapture';
 
@@ -166,5 +167,11 @@ app.route('/entries', entryRouter);
 app.route('/resources', resourceRouter);
 app.route('/upload', uploadRouter);
 app.route('/errors', errorRouter);
+
+// Migration API (conditionally enabled)
+if (env.MIGRATION_API_ENABLED) {
+  app.route('/migration', migrationRouter);
+  console.log('🔧 Migration API enabled');
+}
 
 export default app;

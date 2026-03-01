@@ -27,6 +27,10 @@ const envSchema = z.object({
   LOG_TTL_DAYS: z.string().default('90').transform(Number),
   LOG_ARCHIVE_DAYS: z.string().default('30').transform(Number),
   CASCADE_DELETE_LOG_DAYS: z.string().default('30').transform(Number),
+
+  // Migration API configuration
+  MIGRATION_API_ENABLED: z.string().default('false').transform(v => v === 'true'),
+  MIGRATION_API_TOKEN: z.string().optional(),
 }).refine((data) => data.PORT || data.SERVER_PORT, {
   message: 'Either PORT or SERVER_PORT must be provided',
   path: ['PORT'],

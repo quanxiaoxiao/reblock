@@ -53,7 +53,7 @@ export enum DataLossRisk {
 
 // Context information about detection
 export interface ILogContext {
-  detectedBy: 'doctor' | 'cleanup' | 'resourceService' | 'uploadService' | 'system';
+  detectedBy: 'doctor' | 'cleanup' | 'resourceService' | 'uploadService' | 'migrationService' | 'system';
   detectedAt: number;
   scriptVersion?: string;
   serverVersion?: string;
@@ -215,10 +215,10 @@ const logEntrySchema = new Schema<ILogEntry>({
   
   // Detection context
   context: {
-    detectedBy: { 
-      type: String, 
+    detectedBy: {
+      type: String,
       required: true,
-      enum: ['doctor', 'cleanup', 'resourceService', 'uploadService', 'system']
+      enum: ['doctor', 'cleanup', 'resourceService', 'uploadService', 'migrationService', 'system']
     },
     detectedAt: { type: Number, required: true },
     scriptVersion: String,
