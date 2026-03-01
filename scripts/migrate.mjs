@@ -215,15 +215,8 @@ async function migrateResource(resource) {
       return;
     }
     
-    const name = metadata.name || '';
+    const name = metadata.name || resourceId;
     const mime = metadata.mime || '';
-    
-    if (!name) {
-      error(`  资源 ${resourceId} 缺少 name 字段`);
-      stats.failed++;
-      stats.failedIds.push(`${resourceId}(no_name)`);
-      return;
-    }
     
     // 2. Download binary content
     const content = await downloadResource(resourceId);
