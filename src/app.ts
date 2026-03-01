@@ -9,10 +9,14 @@ import blockRouter from './routes/blockRouter';
 import entryRouter from './routes/entryRouter';
 import resourceRouter from './routes/resourceRouter';
 import uploadRouter from './routes/uploadRouter';
+import { errorHandler } from './routes/middlewares/errorHandler';
+import { captureRequestBody } from './routes/middlewares/requestCapture';
 
 const app = new OpenAPIHono();
 
 app.use('*', logger());
+app.use('*', captureRequestBody);
+app.use('*', errorHandler);
 
 const {
   MONGO_USERNAME,
