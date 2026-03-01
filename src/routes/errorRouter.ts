@@ -354,7 +354,7 @@ router.openapi(
   }),
   async (c: Context) => {
     const { id } = c.req.param();
-    const { resolution, fixedVersion } = await c.req.json();
+    const { resolution } = await c.req.json();
     
     try {
       await logService.markResolved(id, resolution);

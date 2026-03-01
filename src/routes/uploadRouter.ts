@@ -130,7 +130,6 @@ router.openapi(
     // Generate temp file path
     const tempFileName = generateTempFileName();
     const tempFilePath = path.join(tempDir, tempFileName);
-    let uploadSize = 0;
     
     try {
       // Stream request body to temp file (no buffering)
@@ -159,7 +158,6 @@ router.openapi(
         await fs.unlink(tempFilePath);
         return c.json({ error: 'Empty file' }, 400);
       }
-      uploadSize = stats.size;
 
       // Get name from query parameter
       const name = c.req.query('name')?.trim();
@@ -179,7 +177,7 @@ router.openapi(
         userAgent
       );
 
-      metricsSnapshotService.recordUploadSuccess(uploadSize);
+      metricsSnapshotService.recordUploadSuccess(stats.size);
       
       return c.json(resource, 201);
     } catch (error) {

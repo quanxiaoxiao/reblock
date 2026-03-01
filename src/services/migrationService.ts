@@ -158,7 +158,7 @@ export class MigrationService {
       await fs.writeFile(tempFilePath, buffer);
 
       return tempFilePath;
-    } catch (error) {
+    } catch {
       throw new MigrationError('Invalid base64 content', 400, 'INVALID_BASE64');
     }
   }

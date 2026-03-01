@@ -172,7 +172,7 @@ async function fetchResourceMetadata(resourceId) {
     }
     
     return await response.json();
-  } catch (err) {
+  } catch {
     return null;
   }
 }
@@ -190,7 +190,7 @@ async function downloadResource(resourceId) {
     
     const buffer = await response.arrayBuffer();
     return Buffer.from(buffer);
-  } catch (err) {
+  } catch {
     return null;
   }
 }
@@ -290,11 +290,12 @@ async function migrateResource(resource) {
         stats.failedIds.push(`${resourceId}(conflict)`);
         break;
         
-      default:
+      default: {
         const body = await response.text();
         error(`  迁移失败 (HTTP ${response.status}): ${body.substring(0, 100)}`);
         stats.failed++;
         stats.failedIds.push(`${resourceId}(http_${response.status})`);
+      }
     }
     
   } catch (err) {
