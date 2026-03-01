@@ -39,6 +39,8 @@
     "doctor": "node scripts/doctor.mjs",
     "cleanup": "node scripts/cleanup.mjs",
     "logs:analyze": "node scripts/logs-analyze.mjs",
+    "errors:fetch": "node scripts/errors-fetch.mjs",
+    "errors:resolve": "node scripts/errors-resolve.mjs",
     "resource:corrupt": "node scripts/resource-corrupt.mjs",
     "resource:report": "node scripts/resource-report.mjs",
     "resource:test": "node scripts/resource-test-suite.mjs",
