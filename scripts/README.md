@@ -179,3 +179,5 @@ npm run errors:resolve -- --id <error_id> --resolution "fixed by ..."
 ```
 
 Generated files are stored under `tests/hurl/errors/generated/`.
+
+If `/errors` token protection is enabled, set `ERRORS_API_TOKEN` (or `MIGRATION_API_TOKEN`) in `.env`.

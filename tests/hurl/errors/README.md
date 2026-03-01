@@ -24,3 +24,9 @@ Run requestId correlation template:
 ```bash
 hurl tests/hurl/errors/request-id-correlation.hurl --variable BASE_URL=http://localhost:4362
 ```
+
+If `ERRORS_API_TOKEN` is enabled on server, also pass:
+
+```bash
+--variable ERRORS_TOKEN=your-errors-token
+```

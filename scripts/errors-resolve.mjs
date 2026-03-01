@@ -36,6 +36,7 @@ loadEnv();
 
 const DEFAULT_SERVER = process.env.SERVER_HOST || 'localhost';
 const DEFAULT_PORT = process.env.SERVER_PORT || '4362';
+const ERROR_API_TOKEN = process.env.ERRORS_API_TOKEN || process.env.MIGRATION_API_TOKEN || '';
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -86,6 +87,7 @@ async function resolveError(options) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...(ERROR_API_TOKEN ? { 'x-errors-token': ERROR_API_TOKEN } : {}),
     },
     body: JSON.stringify({
       resolution: options.resolution,

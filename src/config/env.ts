@@ -48,6 +48,7 @@ const envSchema = z.object({
   // Migration API configuration
   MIGRATION_API_ENABLED: z.string().default('false').transform(v => v === 'true'),
   MIGRATION_API_TOKEN: z.string().optional(),
+  ERRORS_API_TOKEN: z.string().optional(),
 }).refine((data) => data.PORT || data.SERVER_PORT, {
   message: 'Either PORT or SERVER_PORT must be provided',
   path: ['PORT'],

@@ -39,6 +39,7 @@ loadEnv();
 
 const DEFAULT_SERVER = process.env.SERVER_HOST || 'localhost';
 const DEFAULT_PORT = process.env.SERVER_PORT || '4362';
+const ERROR_API_TOKEN = process.env.ERRORS_API_TOKEN || process.env.MIGRATION_API_TOKEN || '';
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -81,6 +82,10 @@ function getBaseUrl(options) {
   return `http://${options.server}:${options.port}`;
 }
 
+function getAuthHeaders() {
+  return ERROR_API_TOKEN ? { 'x-errors-token': ERROR_API_TOKEN } : {};
+}
+
 async function fetchErrors(options) {
   const baseUrl = getBaseUrl(options);
   const url = new URL(`${baseUrl}/errors`);
@@ -91,7 +96,9 @@ async function fetchErrors(options) {
 
   console.error(`Fetching errors from ${url.toString()}...`);
 
-  const response = await fetch(url.toString());
+  const response = await fetch(url.toString(), {
+    headers: getAuthHeaders(),
+  });
   
   if (!response.ok) {
     throw new Error(`Failed to fetch errors: ${response.status} ${response.statusText}`);
@@ -104,7 +111,9 @@ async function fetchErrorExport(errorId, options) {
   const baseUrl = getBaseUrl(options);
   const url = `${baseUrl}/errors/${errorId}/export`;
 
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    headers: getAuthHeaders(),
+  });
   
   if (!response.ok) {
     throw new Error(`Failed to fetch error export: ${response.status}`);

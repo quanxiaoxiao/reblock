@@ -5,6 +5,7 @@ HURL_ENV="${HURL_ENV:-local}"
 TEST_PORT="${TEST_PORT:-4362}"
 BASE_URL=""
 SERVER_LOG="${SERVER_LOG:-/tmp/reblock-hurl-server.log}"
+ERRORS_TOKEN="${ERRORS_TOKEN:-test-errors-token}"
 
 cleanup() {
   if [ "${SERVER_PID:-}" != "" ]; then
@@ -31,7 +32,7 @@ fi
 
 BASE_URL="http://127.0.0.1:${TEST_PORT}"
 
-NODE_ENV=test PORT="${TEST_PORT}" node dist/server.js >"${SERVER_LOG}" 2>&1 &
+NODE_ENV=test PORT="${TEST_PORT}" ERRORS_API_TOKEN="${ERRORS_TOKEN}" node dist/server.js >"${SERVER_LOG}" 2>&1 &
 SERVER_PID=$!
 
 i=0
@@ -48,6 +49,7 @@ hurl \
   --test \
   --variables-file "tests/hurl/env/${HURL_ENV}.env" \
   --variable BASE_URL="${BASE_URL}" \
+  --variable ERRORS_TOKEN="${ERRORS_TOKEN}" \
   --variable timestamp="$(date +%s)" \
   --variable date="$(date +%Y-%m-%d)" \
   tests/hurl

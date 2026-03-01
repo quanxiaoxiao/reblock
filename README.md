@@ -233,7 +233,8 @@ npm run errors:repro -- --run
 hurl tests/hurl/errors/generated/repro-<error_id>.hurl --variable BASE_URL=http://localhost:4362
 
 # 5) If you have request id, narrow scope quickly
-curl "http://localhost:4362/errors?days=1&status=open&requestId=<request_id>"
+curl -H "x-errors-token: <errors_api_token>" \
+  "http://localhost:4362/errors?days=1&status=open&requestId=<request_id>"
 
 # 6) Mark resolved after verification
 npm run errors:resolve -- --id <error_id> --resolution "Root cause fixed"
@@ -270,6 +271,10 @@ ENCRYPTION_KEY=your_base64_key_here
 # Cleanup
 CLEANUP_DEFAULT_DAYS=30
 LOG_TTL_DAYS=90
+
+# Error API protection (optional)
+# If set, all /errors endpoints require x-errors-token
+ERRORS_API_TOKEN=your-errors-token
 ```
 
 ## Data Model

@@ -112,6 +112,28 @@ const ErrorSchema = z.object({
 
 const router = new OpenAPIHono();
 
+async function errorsAuthMiddleware(c: Context, next: () => Promise<void>) {
+  const configuredToken = env.ERRORS_API_TOKEN || env.MIGRATION_API_TOKEN;
+  if (!configuredToken) {
+    await next();
+    return;
+  }
+
+  const xErrorsToken = c.req.header('x-errors-token');
+  const xMigrationToken = c.req.header('x-migration-token');
+  const authHeader = c.req.header('authorization');
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined;
+
+  const provided = xErrorsToken || xMigrationToken || bearerToken;
+  if (!provided || provided !== configuredToken) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  await next();
+}
+
+router.use('*', errorsAuthMiddleware);
+
 // GET /errors - List runtime errors
 router.openapi(
   createRoute({

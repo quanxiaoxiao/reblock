@@ -43,6 +43,7 @@ loadEnv();
 
 const DEFAULT_SERVER = process.env.SERVER_HOST || 'localhost';
 const DEFAULT_PORT = process.env.SERVER_PORT || '4362';
+const ERROR_API_TOKEN = process.env.ERRORS_API_TOKEN || process.env.MIGRATION_API_TOKEN || '';
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -84,6 +85,10 @@ function parseArgs() {
 
 function getBaseUrl(options) {
   return `http://${options.server}:${options.port}`;
+}
+
+function getAuthHeaders() {
+  return ERROR_API_TOKEN ? { 'x-errors-token': ERROR_API_TOKEN } : {};
 }
 
 function buildPathWithQuery(path, query) {
@@ -135,7 +140,9 @@ async function fetchErrors(options) {
   url.searchParams.set('limit', '1');
   url.searchParams.set('offset', '0');
 
-  const response = await fetch(url.toString());
+  const response = await fetch(url.toString(), {
+    headers: getAuthHeaders(),
+  });
   if (!response.ok) {
     throw new Error(`Failed to fetch errors: ${response.status} ${response.statusText}`);
   }
@@ -147,7 +154,9 @@ async function fetchErrorExport(errorId, options) {
   const baseUrl = getBaseUrl(options);
   const url = `${baseUrl}/errors/${errorId}/export`;
 
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    headers: getAuthHeaders(),
+  });
   if (!response.ok) {
     throw new Error(`Failed to fetch error export: ${response.status} ${response.statusText}`);
   }
@@ -166,6 +175,9 @@ function generateHurl(errorId, exported, options) {
   lines.push(`# Auto generated from /errors/${errorId}/export`);
   lines.push(`# Summary: ${(exported.summary || 'Unknown').toString().replace(/\n/g, ' ')}`);
   lines.push(`${method} {{BASE_URL}}${path}`);
+  if (ERROR_API_TOKEN) {
+    lines.push('x-errors-token: {{ERRORS_TOKEN}}');
+  }
 
   const headerEntries = Object.entries(headers);
   if (hasBody && !headerEntries.some(([k]) => k.toLowerCase() === 'content-type')) {
@@ -201,7 +213,11 @@ function writeHurlFile(content, filePath) {
 
 function runHurl(filePath, options) {
   return new Promise((resolveRun, rejectRun) => {
-    const child = spawn('hurl', [filePath, '--variable', `BASE_URL=${getBaseUrl(options)}`], {
+    const args = [filePath, '--variable', `BASE_URL=${getBaseUrl(options)}`];
+    if (ERROR_API_TOKEN) {
+      args.push('--variable', `ERRORS_TOKEN=${ERROR_API_TOKEN}`);
+    }
+    const child = spawn('hurl', args, {
       stdio: 'inherit',
     });
 
