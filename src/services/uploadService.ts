@@ -7,6 +7,8 @@ import { fileTypeFromFile } from 'file-type';
 import { Block, Entry, Resource } from '../models';
 import type { IBlock, IEntry, IResource, IUploadConfig } from '../models';
 import { env } from '../config/env';
+import { logService } from './logService';
+import { LogLevel, LogCategory, DataLossRisk } from '../models/logEntry';
 import { 
   generateStorageName, 
   generateIV, 
@@ -206,7 +208,7 @@ export class UploadService implements IUploadService {
         }
 
         if (!fileExists) {
-          await this.encryptAndMoveFile(tempFilePath, blockPath, iv);
+          await this.encryptAndMoveFile(tempFilePath, blockPath, iv, sha256, size);
         } else {
           await fs.unlink(tempFilePath).catch(() => {});
         }
@@ -241,13 +243,35 @@ export class UploadService implements IUploadService {
       }
     }
 
+    // Log the deduplication failure
+    await logService.logIssue({
+      level: LogLevel.ERROR,
+      category: LogCategory.DATA_INCONSISTENCY,
+      details: {
+        error: `Failed to deduplicate block after ${maxRetries} retries`,
+        sha256,
+        size,
+        maxRetries,
+      },
+      suggestedAction: 'Check database consistency and retry upload',
+      recoverable: true,
+      dataLossRisk: DataLossRisk.LOW,
+      context: {
+        detectedBy: 'uploadService',
+        detectedAt: Date.now(),
+        environment: env.NODE_ENV,
+      },
+    });
+
     throw new Error(`Failed to deduplicate block after ${maxRetries} retries`);
   }
 
   private async encryptAndMoveFile(
     tempFilePath: string, 
     blockPath: string, 
-    iv: Buffer
+    iv: Buffer,
+    sha256?: string,
+    size?: number
   ): Promise<void> {
     // Create encrypt stream
     const encryptStream = createEncryptStream(iv);
@@ -260,6 +284,28 @@ export class UploadService implements IUploadService {
       // Pipeline: read → encrypt → write
       await pipeline(readStream, encryptStream, writeStream);
     } catch (error) {
+      // Log the encryption failure
+      await logService.logIssue({
+        level: LogLevel.ERROR,
+        category: LogCategory.RUNTIME_ERROR,
+        details: {
+          error: `Failed to encrypt and move file: ${(error as Error).message}`,
+          tempFilePath,
+          blockPath,
+          sha256,
+          size,
+        },
+        suggestedAction: 'Check storage permissions and disk space',
+        recoverable: true,
+        dataLossRisk: DataLossRisk.LOW,
+        context: {
+          detectedBy: 'uploadService',
+          detectedAt: Date.now(),
+          environment: env.NODE_ENV,
+          stackTrace: (error as Error).stack,
+        },
+      });
+
       // Clean up on error
       try {
         await fs.unlink(blockPath);
@@ -271,8 +317,25 @@ export class UploadService implements IUploadService {
       // Delete temp file regardless of success or failure
       try {
         await fs.unlink(tempFilePath);
-      } catch {
-        // Ignore cleanup error
+      } catch (cleanupError) {
+        // Log temp file cleanup failure (warning level)
+        await logService.logIssue({
+          level: LogLevel.WARNING,
+          category: LogCategory.RUNTIME_ERROR,
+          details: {
+            error: `Failed to clean up temp file: ${(cleanupError as Error).message}`,
+            tempFilePath,
+            sha256,
+          },
+          suggestedAction: 'Manually clean up temp files to free disk space',
+          recoverable: true,
+          dataLossRisk: DataLossRisk.NONE,
+          context: {
+            detectedBy: 'uploadService',
+            detectedAt: Date.now(),
+            environment: env.NODE_ENV,
+          },
+        });
       }
     }
   }
@@ -318,8 +381,33 @@ export class UploadService implements IUploadService {
       uploadDuration: uploadDuration
     });
 
-    const savedResource = await resource.save();
-    return savedResource;
+    try {
+      const savedResource = await resource.save();
+      return savedResource;
+    } catch (error) {
+      // Log database save failure
+      await logService.logIssue({
+        level: LogLevel.ERROR,
+        category: LogCategory.RUNTIME_ERROR,
+        details: {
+          error: `Failed to save resource to database: ${(error as Error).message}`,
+          entryId: entry._id.toString(),
+          blockId: block._id.toString(),
+          name,
+          mime,
+        },
+        suggestedAction: 'Check database connection and retry upload',
+        recoverable: true,
+        dataLossRisk: DataLossRisk.MEDIUM,
+        context: {
+          detectedBy: 'uploadService',
+          detectedAt: Date.now(),
+          environment: env.NODE_ENV,
+          stackTrace: (error as Error).stack,
+        },
+      });
+      throw error;
+    }
   }
 }
 

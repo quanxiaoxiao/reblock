@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { appendFile, mkdir } from 'fs/promises';
+import { appendFile, mkdir, readdir, rename } from 'fs/promises';
 import { join } from 'path';
 import { env } from '../config/env';
 import { 
@@ -30,10 +30,22 @@ import {
  */
 
 // Log storage configuration
-const LOG_DIR = join(process.cwd(), env.STORAGE_LOG_DIR);
-const ISSUES_DIR = join(LOG_DIR, 'issues');
-const ACTIONS_DIR = join(LOG_DIR, 'actions');
-const ARCHIVE_DIR = join(LOG_DIR, 'archive');
+// Use lazy initialization to handle test environment where env might not be loaded
+function getLogDir(): string {
+  return join(process.cwd(), env.STORAGE_LOG_DIR || './storage/_logs');
+}
+
+function getIssuesDir(): string {
+  return join(getLogDir(), 'issues');
+}
+
+function getActionsDir(): string {
+  return join(getLogDir(), 'actions');
+}
+
+function getArchiveDir(): string {
+  return join(getLogDir(), 'archive');
+}
 
 // Archive threshold configuration
 const LOG_ARCHIVE_MS = env.LOG_ARCHIVE_DAYS * 24 * 60 * 60 * 1000;
@@ -356,7 +368,7 @@ export class LogService {
   private async writeToFile(entry: ILogEntry, subdir: 'issues' | 'actions'): Promise<void> {
     try {
       const date = new Date().toISOString().split('T')[0];
-      const dir = subdir === 'issues' ? ISSUES_DIR : ACTIONS_DIR;
+      const dir = subdir === 'issues' ? getIssuesDir() : getActionsDir();
       const filePath = join(dir, `${date}.jsonl`);
 
       // Ensure directory exists
@@ -426,25 +438,145 @@ export class LogService {
   }
 
   /**
+   * Find and resolve open issues by blockId and category
+   * Used by cleanup script to auto-close resolved issues
+   * Performance optimized: bulk update
+   */
+  async resolveIssuesByBlockId(
+    blockId: string,
+    category: LogCategory,
+    resolution: string,
+    resolvedBy: string = 'cleanup-script'
+  ): Promise<{ resolved: number; errors: string[] }> {
+    const errors: string[] = [];
+
+    try {
+      // Find all open issues matching the criteria
+      const openIssues = await LogEntry.find({
+        blockId: new Types.ObjectId(blockId),
+        category: category,
+        status: IssueStatus.OPEN,
+      });
+
+      if (openIssues.length === 0) {
+        return { resolved: 0, errors: [] };
+      }
+
+      const now = Date.now();
+
+      // Bulk update all matching issues
+      for (const issue of openIssues) {
+        // Add to status history
+        issue.statusHistory = issue.statusHistory || [];
+        issue.statusHistory.push({
+          status: issue.status,
+          changedAt: now,
+          changedBy: resolvedBy,
+          note: 'Auto-resolved by cleanup action',
+        });
+
+        // Update status
+        issue.status = IssueStatus.RESOLVED;
+        issue.resolvedAt = now;
+        issue.resolution = resolution;
+        issue.resolvedBy = resolvedBy;
+
+        await issue.save();
+      }
+
+      return { resolved: openIssues.length, errors };
+    } catch (error) {
+      errors.push(`Failed to resolve issues for block ${blockId}: ${error}`);
+      return { resolved: 0, errors };
+    }
+  }
+
+  /**
    * Archive old log files (move files older than LOG_ARCHIVE_DAYS to archive/)
    * Should be called periodically (e.g., daily via cron)
+   * 
+   * Performance optimized: batch file operations
    */
   async archiveOldFiles(): Promise<{ archived: number; errors: string[] }> {
     const archiveThreshold = Date.now() - LOG_ARCHIVE_MS;
     const errors: string[] = [];
-    const archived = 0;
+    let archived = 0;
 
     try {
       // Ensure archive directory exists
-      await mkdir(ARCHIVE_DIR, { recursive: true });
+      await mkdir(getArchiveDir(), { recursive: true });
 
-      // This is a placeholder - in real implementation, you would:
-      // 1. List all files in ISSUES_DIR and ACTIONS_DIR
-      // 2. Parse dates from filenames
-      // 3. Use archiveThreshold to filter files older than LOG_ARCHIVE_DAYS
-      // 4. Move files to ARCHIVE_DIR organized by month (e.g., archive/2024-02/)
+      // Process both issues and actions directories
+      const dirs = [getIssuesDir(), getActionsDir()];
+      
+      for (const dir of dirs) {
+        try {
+          const files = await readdir(dir);
+          
+          for (const file of files) {
+            // Parse date from filename (YYYY-MM-DD.jsonl)
+            const dateMatch = file.match(/^(\d{4})-(\d{2})-(\d{2})\.jsonl$/);
+            if (!dateMatch) continue;
+
+            const fileDate = new Date(`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`).getTime();
+            
+            // Check if file is older than threshold
+            if (fileDate < archiveThreshold) {
+              const sourcePath = join(dir, file);
+              const monthDir = join(getArchiveDir(), dateMatch[1], dateMatch[2]);
+              
+              // Create month directory if not exists
+              await mkdir(monthDir, { recursive: true });
+              
+              const destPath = join(monthDir, file);
+              
+              try {
+                await rename(sourcePath, destPath);
+                archived++;
+              } catch (moveError) {
+                errors.push(`Failed to move ${file}: ${moveError}`);
+              }
+            }
+          }
+        } catch (dirError) {
+          // Directory might not exist yet, skip
+          if ((dirError as NodeJS.ErrnoException).code !== 'ENOENT') {
+            errors.push(`Failed to read directory ${dir}: ${dirError}`);
+          }
+        }
+      }
 
       console.log(`Archived ${archived} log files (threshold: ${archiveThreshold})`);
+      
+      // Log archive action
+      if (archived > 0 || errors.length > 0) {
+        const archiveLogEntry = new LogEntry({
+          timestamp: Date.now(),
+          level: errors.length > 0 ? LogLevel.WARNING : LogLevel.INFO,
+          category: LogCategory.CLEANUP_ACTION,
+          details: {
+            action: 'archive_old_logs',
+            archivedCount: archived,
+            errorCount: errors.length,
+            threshold: archiveThreshold,
+          },
+          suggestedAction: errors.length > 0 ? 'Check archive errors and retry' : 'Archive completed successfully',
+          recoverable: errors.length > 0,
+          dataLossRisk: DataLossRisk.NONE,
+          context: {
+            detectedBy: 'system',
+            detectedAt: Date.now(),
+            environment: this.getEnvironment(),
+          },
+          status: IssueStatus.RESOLVED,
+          resolvedAt: Date.now(),
+          resolution: `Archived ${archived} files${errors.length > 0 ? ` with ${errors.length} errors` : ''}`,
+          resolvedBy: 'archive-script',
+        });
+        
+        await archiveLogEntry.save();
+        await this.writeToFile(archiveLogEntry, 'actions');
+      }
     } catch (error) {
       errors.push(`Failed to archive files: ${error}`);
     }

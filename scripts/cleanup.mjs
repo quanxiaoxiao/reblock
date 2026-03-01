@@ -223,10 +223,24 @@ async function executeCleanup(items) {
   const results = {
     orphaned: { success: 0, failed: 0 },
     linkcount: { success: 0, failed: 0 },
+    autoResolved: 0,
   };
 
   // Initialize log service
   const service = await initLogService();
+  
+  // Get LogCategory from logEntry model
+  let LogCategory;
+  try {
+    const logEntryModule = await import('../dist/models/logEntry.js');
+    LogCategory = logEntryModule.LogCategory;
+  } catch {
+    // Fallback if import fails
+    LogCategory = {
+      ORPHANED_BLOCK: 'ORPHANED_BLOCK',
+      LINKCOUNT_MISMATCH: 'LINKCOUNT_MISMATCH',
+    };
+  }
 
   console.log(`\n${colors.cyan}📝 Executing cleanup...${colors.reset}\n`);
 
@@ -261,6 +275,19 @@ async function executeCleanup(items) {
           success: true,
         });
 
+        // Auto-resolve related ORPHANED_BLOCK issues
+        const resolution = 'Resolved by cleanup script: soft_delete';
+        const { resolved, errors: resolveErrors } = await service.resolveIssuesByBlockId(
+          item.blockId,
+          LogCategory.ORPHANED_BLOCK,
+          resolution,
+          'cleanup-script'
+        );
+        results.autoResolved += resolved;
+        if (resolveErrors.length > 0) {
+          console.log(`      ${colors.gray}⚠ Auto-resolve errors: ${resolveErrors.join(', ')}${colors.reset}`);
+        }
+
       } else if (item.type === 'linkcount') {
         // Fix linkcount
         await Block.updateOne(
@@ -283,6 +310,19 @@ async function executeCleanup(items) {
           },
           success: true,
         });
+
+        // Auto-resolve related LINKCOUNT_MISMATCH issues
+        const resolution = 'Resolved by cleanup script: fix_linkcount';
+        const { resolved, errors: resolveErrors } = await service.resolveIssuesByBlockId(
+          item.blockId,
+          LogCategory.LINKCOUNT_MISMATCH,
+          resolution,
+          'cleanup-script'
+        );
+        results.autoResolved += resolved;
+        if (resolveErrors.length > 0) {
+          console.log(`      ${colors.gray}⚠ Auto-resolve errors: ${resolveErrors.join(', ')}${colors.reset}`);
+        }
       }
     } catch (error) {
       if (item.type === 'orphaned') {
@@ -424,6 +464,9 @@ Examples:
     console.log(`   处理: ${allItems.length} 个 blocks`);
     console.log(`   孤立 blocks: ${results.orphaned.success} 成功, ${results.orphaned.failed} 失败`);
     console.log(`   LinkCount 修正: ${results.linkcount.success} 成功, ${results.linkcount.failed} 失败`);
+    if (results.autoResolved > 0) {
+      console.log(`   自动关闭 issues: ${results.autoResolved} 个`);
+    }
     console.log(`   耗时: ${duration}ms\n`);
 
     process.exit(0);
