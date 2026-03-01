@@ -3,12 +3,16 @@ import app from './app';
 import { env } from './config/env';
 import { schedule } from 'node-cron';
 import { logService } from './services/logService';
+import { metricsSnapshotService } from './services/metricsSnapshotService';
 
 const port = env.PORT || env.SERVER_PORT || 3000;
 
 // Initialize log archive scheduler (daily at 03:00 AM)
 // Skip in test environment to avoid interference with tests
 if (env.NODE_ENV !== 'test') {
+  metricsSnapshotService.startScheduler(env.METRICS_SNAPSHOT_INTERVAL_MINUTES);
+  console.log(`📈 Metrics snapshot scheduler initialized (${env.METRICS_SNAPSHOT_INTERVAL_MINUTES} minute interval)`);
+
   schedule('0 3 * * *', async () => {
     console.log('🕐 Running daily log archive task...');
     try {

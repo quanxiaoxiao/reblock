@@ -11,6 +11,7 @@ import resourceRouter from './routes/resourceRouter';
 import uploadRouter from './routes/uploadRouter';
 import errorRouter from './routes/errorRouter';
 import migrationRouter from './routes/migrationRouter';
+import metricsRouter from './routes/metricsRouter';
 import { errorHandler } from './routes/middlewares/errorHandler';
 import { captureRequestBody } from './routes/middlewares/requestCapture';
 
@@ -167,6 +168,7 @@ app.route('/entries', entryRouter);
 app.route('/resources', resourceRouter);
 app.route('/upload', uploadRouter);
 app.route('/errors', errorRouter);
+app.route('/metrics', metricsRouter);
 
 // Migration API (conditionally enabled)
 if (env.MIGRATION_API_ENABLED) {

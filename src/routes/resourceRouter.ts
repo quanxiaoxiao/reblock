@@ -4,6 +4,7 @@ import { createReadStream } from 'fs';
 import { Readable, PassThrough } from 'stream';
 import { pipeline } from 'stream/promises';
 import { resourceService, logService } from '../services';
+import { metricsSnapshotService } from '../services/metricsSnapshotService';
 import { DownloadError } from '../services/resourceService';
 import { createDecryptStream, createDecryptStreamWithOffset } from '../utils/crypto';
 import { env } from '../config/env';
@@ -411,26 +412,31 @@ router.openapi(
         
         // Use PassThrough to handle the pipeline
         const passThrough = new PassThrough();
-        pipeline(fileStream, decryptStream, passThrough).catch(async (err) => {
-          await logService.logIssue({
-            level: LogLevel.ERROR,
-            category: LogCategory.RUNTIME_ERROR,
-            details: {
-              operation: 'streamDownloadWithRange',
-              resourceId: id,
-              error: err.message,
-            },
-            suggestedAction: 'Check server logs for detailed error information',
-            recoverable: true,
-            dataLossRisk: DataLossRisk.NONE,
-            context: {
-              detectedBy: 'resourceService',
-              detectedAt: Date.now(),
-              environment: env.NODE_ENV as 'development' | 'production' | 'test',
-              stackTrace: err.stack,
-            },
+        pipeline(fileStream, decryptStream, passThrough)
+          .then(() => {
+            metricsSnapshotService.recordDownloadSuccess(result.size);
+          })
+          .catch(async (err) => {
+            metricsSnapshotService.recordDownloadInterrupted();
+            await logService.logIssue({
+              level: LogLevel.ERROR,
+              category: LogCategory.RUNTIME_ERROR,
+              details: {
+                operation: 'streamDownloadWithRange',
+                resourceId: id,
+                error: err.message,
+              },
+              suggestedAction: 'Check server logs for detailed error information',
+              recoverable: true,
+              dataLossRisk: DataLossRisk.NONE,
+              context: {
+                detectedBy: 'resourceService',
+                detectedAt: Date.now(),
+                environment: env.NODE_ENV as 'development' | 'production' | 'test',
+                stackTrace: err.stack,
+              },
+            });
           });
-        });
         
         const webStream = Readable.toWeb(passThrough);
         const disposition = inline ? 'inline' : 'attachment';
@@ -455,26 +461,31 @@ router.openapi(
       
       // Use PassThrough to handle the pipeline
       const passThrough = new PassThrough();
-      pipeline(fileStream, decryptStream, passThrough).catch(async (err) => {
-        await logService.logIssue({
-          level: LogLevel.ERROR,
-          category: LogCategory.RUNTIME_ERROR,
-          details: {
-            operation: 'streamDownload',
-            resourceId: id,
-            error: err.message,
-          },
-          suggestedAction: 'Check server logs for detailed error information',
-          recoverable: true,
-          dataLossRisk: DataLossRisk.NONE,
-          context: {
-            detectedBy: 'resourceService',
-            detectedAt: Date.now(),
-            environment: env.NODE_ENV as 'development' | 'production' | 'test',
-            stackTrace: err.stack,
-          },
+      pipeline(fileStream, decryptStream, passThrough)
+        .then(() => {
+          metricsSnapshotService.recordDownloadSuccess(result.totalSize);
+        })
+        .catch(async (err) => {
+          metricsSnapshotService.recordDownloadInterrupted();
+          await logService.logIssue({
+            level: LogLevel.ERROR,
+            category: LogCategory.RUNTIME_ERROR,
+            details: {
+              operation: 'streamDownload',
+              resourceId: id,
+              error: err.message,
+            },
+            suggestedAction: 'Check server logs for detailed error information',
+            recoverable: true,
+            dataLossRisk: DataLossRisk.NONE,
+            context: {
+              detectedBy: 'resourceService',
+              detectedAt: Date.now(),
+              environment: env.NODE_ENV as 'development' | 'production' | 'test',
+              stackTrace: err.stack,
+            },
+          });
         });
-      });
       
       const webStream = Readable.toWeb(passThrough);
       const disposition = inline ? 'inline' : 'attachment';
@@ -490,6 +501,9 @@ router.openapi(
       if (error instanceof DownloadError) {
         const status = error.statusCode as 404 | 416 | 500;
         const headers: Record<string, string> = {};
+        if (status === 500) {
+          metricsSnapshotService.recordDownloadInterrupted();
+        }
 
         // For 416 errors, include Content-Range header
         if (status === 416) {
