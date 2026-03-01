@@ -525,12 +525,6 @@ async function logDetectedIssues(results, duplicates) {
           size: result.size,
         };
 
-        // Build actual state
-        const actualState = {
-          refCount: result.actualLinkCount,
-          fileExists: result.fileExists,
-        };
-
         // Log the issue
         await service.logIssue({
           level,
@@ -622,7 +616,7 @@ Examples:
     if (options.blockId && options.blockId !== 'undefined') {
       try {
         query._id = new mongoose.Types.ObjectId(options.blockId);
-      } catch (_error) {
+      } catch {
         console.error(`${colors.red}✗ 无效的 Block ID 格式: ${options.blockId}${colors.reset}`);
         console.error(`${colors.gray}Block ID 必须是 24 字符的十六进制字符串${colors.reset}`);
         process.exit(2);

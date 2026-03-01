@@ -142,9 +142,11 @@ const Block = mongoose.model('Block', blockSchema);
 const Resource = mongoose.model('Resource', resourceSchema);
 const Entry = mongoose.model('Entry', entrySchema);
 
+import readline from 'readline';
+
 function askQuestion(query) {
   return new Promise((resolve) => {
-    const rl = require('readline').createInterface({
+    const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
     });
@@ -226,7 +228,7 @@ async function restoreFromLog(log) {
         } else {
           results.resources.failed++;
         }
-      } catch (e) {
+      } catch {
         results.resources.failed++;
       }
     }
@@ -240,7 +242,7 @@ async function restoreFromLog(log) {
           { session }
         );
         results.blocks.success++;
-      } catch (e) {
+      } catch {
         results.blocks.failed++;
       }
     }

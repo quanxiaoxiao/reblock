@@ -360,7 +360,7 @@ async function importImages() {
     
     if (results.failed.length > 0) {
       console.log('Failed uploads (expected if >500KB or not image):');
-      for (const { file, error, status } of results.failed) {
+      for (const { file, error } of results.failed) {
         console.log(`  - ${file.name} (${formatBytes(file.size)}): ${error}`);
       }
       console.log();

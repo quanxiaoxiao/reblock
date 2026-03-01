@@ -16,10 +16,9 @@
  * Usage: node scripts/test-logging.mjs
  */
 
-import { readFileSync, statSync, unlinkSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { createReadStream, createWriteStream } from 'fs';
-import { resolve, dirname, join } from 'path';
-import { pipeline } from 'stream/promises';
+import { readFileSync, unlinkSync, mkdirSync, existsSync } from 'fs';
+import { createReadStream } from 'fs';
+import { resolve, dirname } from 'path';
 import mongoose from 'mongoose';
 
 /**
@@ -62,11 +61,6 @@ const CONFIG = {
   LOG_FILE: resolve(process.env.STORAGE_LOG_DIR || './storage/_logs', `issues/${getDateString()}.jsonl`),
   TEST_TIMEOUT: 30000,
 };
-
-function getDateString() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-}
 
 const colors = {
   reset: '\x1b[0m',
@@ -144,6 +138,7 @@ function getTimestamp() {
   return Date.now();
 }
 
+// eslint-disable-next-line no-unused-vars
 async function getLogEntries(category = null) {
   const lines = await readFileSync(CONFIG.LOG_FILE, 'utf-8')
     .then(content => content.trim().split('\n').filter(Boolean))
@@ -189,6 +184,7 @@ async function updateBlock(blockId, update) {
   return await collection.updateOne({ _id: new mongoose.Types.ObjectId(blockId) }, { $set: update });
 }
 
+// eslint-disable-next-line no-unused-vars
 async function getResourceById(resourceId) {
   const db = mongoose.connection.db;
   const collection = db.collection('resources');
@@ -257,7 +253,7 @@ async function testFileSizeMismatch(resource, originalBlock) {
   
   // Check logs
   await new Promise(r => setTimeout(r, 500));
-  const newCount = await countLogEntries(getTimestamp() - 5000);
+  await countLogEntries(getTimestamp() - 5000);
   const logEntries = await getMongoLogs('FILE_SIZE_MISMATCH', getTimestamp() - 5000);
   
   if (logEntries.length > startCount) {
@@ -278,6 +274,7 @@ async function testFileSizeMismatch(resource, originalBlock) {
   return logEntries;
 }
 
+// eslint-disable-next-line no-unused-vars
 async function testMissingFile(resource) {
   log.section('3. MISSING_FILE Test');
   
@@ -311,7 +308,7 @@ async function testMissingFile(resource) {
   return logEntries;
 }
 
-async function testDuplicateUpload(entry) {
+async function testDuplicateUpload(_entry) {
   log.section('4. Duplicate Upload Test');
   
   // Create a new entry for duplicate test

@@ -1,6 +1,5 @@
 import { appendFile, mkdir } from 'fs/promises';
 import { join } from 'path';
-import { env } from '../config/env';
 
 export interface AuditEntry {
   timestamp: number;

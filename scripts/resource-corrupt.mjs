@@ -31,7 +31,6 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { resolve, join, dirname } from 'path';
-import { createHash } from 'crypto';
 import mongoose from 'mongoose';
 
 // Load environment variables
@@ -98,8 +97,6 @@ function parseArgs() {
   const args = process.argv.slice(2);
   
   const resourceIdIndex = args.indexOf('--resource-id');
-  const typeIndex = args.indexOf('--type');
-  const valueIndex = args.indexOf('--value');
   
   const types = [];
   const values = [];
@@ -127,6 +124,7 @@ function parseArgs() {
 }
 
 // Print helpers
+// eslint-disable-next-line no-unused-vars
 function log(message, color = colors.reset) {
   console.log(`${color}${message}${colors.reset}`);
 }
@@ -322,7 +320,7 @@ const corruptions = {
     };
   },
   
-  async 'delete-file'(resource, block, value, models) {
+  async 'delete-file'(resource, block, _value, _models) {
     const storagePath = getStoragePath(block.sha256);
     
     if (!existsSync(storagePath)) {

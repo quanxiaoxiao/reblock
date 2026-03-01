@@ -18,7 +18,7 @@
  *   node scripts/e2e-test.mjs --verbose      # 详细输出
  */
 
-import { readFileSync, createWriteStream, mkdirSync } from 'fs';
+import { readFileSync } from 'fs';
 import { resolve, join } from 'path';
 import { createHash } from 'crypto';
 import { readdir, readFile } from 'fs/promises';
@@ -331,7 +331,7 @@ async function uploadFiles() {
   let errors = 0;
 
   for (let i = 0; i < uploadQueue.length; i++) {
-    const { file, index, isOriginal } = uploadQueue[i];
+    const { file, index } = uploadQueue[i];
     
     try {
       const result = await api(
@@ -419,7 +419,6 @@ async function verifyLinkCounts() {
         continue;
       }
 
-      const resource = result.data;
       const expectedLinkCount = resourceIds.length;
       
       // Get block details
@@ -460,7 +459,6 @@ async function deleteResources() {
   log(`Deleting ${resourcesToDelete.length} resources...`, colors.cyan);
 
   let deleted = 0;
-  let errors = 0;
 
   for (const res of resourcesToDelete) {
     try {
@@ -470,11 +468,9 @@ async function deleteResources() {
         deleted++;
       } else {
         error(`Failed to delete resource ${res.resourceId}: ${result.status}`);
-        errors++;
       }
     } catch (err) {
       error(`Error deleting resource ${res.resourceId}: ${err.message}`);
-      errors++;
     }
   }
 
@@ -504,7 +500,7 @@ async function verifyDeletedResources(deletedResources) {
       } else {
         error(`Expected 404 for deleted resource ${res.resourceId}, got ${result.status}`);
       }
-    } catch (err) {
+    } catch {
       // 404 might throw, that's fine
       verified++;
     }
@@ -595,7 +591,6 @@ async function runDoctor() {
 
     // Check a sample of blocks using doctor
     const sampleBlocks = blockIds.slice(0, 10);
-    let issues = 0;
 
     for (const blockId of sampleBlocks) {
       // We can't easily call doctor programmatically, so we'll do basic checks

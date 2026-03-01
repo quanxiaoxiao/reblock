@@ -101,6 +101,7 @@ function generateStorageName(sha256) {
 }
 
 // Get full storage path
+// eslint-disable-next-line no-unused-vars
 function getStoragePath(sha256) {
   const storageName = generateStorageName(sha256);
   const prefix1 = storageName.substring(0, 2);
@@ -110,6 +111,7 @@ function getStoragePath(sha256) {
 }
 
 // Format bytes to human readable
+// eslint-disable-next-line no-unused-vars
 function formatBytes(bytes) {
   if (!bytes) return '0 B';
   const i = Math.floor(Math.log(bytes) / Math.log(1024));

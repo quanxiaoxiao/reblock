@@ -84,7 +84,7 @@ const countCollection = async (db, name) => {
 // Get directory stats
 const getDirStats = (dirPath) => {
   try {
-    const items = readdirSync(dirPath);
+    readdirSync(dirPath);
     let fileCount = 0;
     let totalSize = 0;
 

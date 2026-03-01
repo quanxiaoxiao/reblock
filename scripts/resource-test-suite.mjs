@@ -103,6 +103,7 @@ function parseArgs() {
 }
 
 // Print helpers
+// eslint-disable-next-line no-unused-vars
 function log(message, color = colors.reset) {
   console.log(`${color}${message}${colors.reset}`);
 }
@@ -115,6 +116,7 @@ function error(message) {
   console.log(`${colors.red}✗${colors.reset} ${message}`);
 }
 
+// eslint-disable-next-line no-unused-vars
 function warn(message) {
   console.log(`${colors.yellow}⚠${colors.reset} ${message}`);
 }
@@ -534,6 +536,7 @@ Examples:
     if (!args.keepData && testData) {
       try {
         await deleteTestResource(testData.resourceId);
+        // eslint-disable-next-line no-empty
       } catch {}
     }
     

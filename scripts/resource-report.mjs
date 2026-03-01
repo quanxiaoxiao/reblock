@@ -26,7 +26,6 @@
 import { readFileSync, statSync, existsSync } from 'fs';
 import { resolve, join } from 'path';
 import mongoose from 'mongoose';
-import { createHash } from 'crypto';
 
 // Load environment variables
 function loadEnv() {
@@ -103,6 +102,7 @@ function parseArgs() {
 }
 
 // Print helpers
+// eslint-disable-next-line no-unused-vars
 function log(message, color = colors.reset) {
   console.log(`${color}${message}${colors.reset}`);
 }
@@ -247,7 +247,7 @@ async function computeSHA256(filePath) {
 
 // Main analysis function
 async function analyzeResource(resourceId, models, options) {
-  const { Resource, Block, Entry, LogEntry } = models;
+  const { Resource, LogEntry } = models;
   const { days } = options;
   
   const report = {
@@ -552,7 +552,7 @@ function printTextReport(report) {
   } else {
     console.log(`${colors.yellow}  Status: ${summary.criticalCount > 0 ? colors.red + 'CRITICAL' : colors.yellow + 'WARNING'} (${anomalies.length} issues)${colors.reset}\n`);
     
-    anomalies.forEach((anomaly, i) => {
+    anomalies.forEach((anomaly, _i) => {
       const color = anomaly.severity === 'CRITICAL' ? colors.red : colors.yellow;
       console.log(`  ${color}[${anomaly.severity}]${colors.reset} ${anomaly.type}`);
       console.log(`    ${colors.gray}${anomaly.description}${colors.reset}`);
