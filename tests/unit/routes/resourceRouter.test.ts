@@ -11,6 +11,9 @@ vi.mock('../../../src/services', () => ({
     list: vi.fn(),
     getById: vi.fn(),
     update: vi.fn(),
+    updateBlock: vi.fn(),
+    getHistory: vi.fn(),
+    rollbackBlock: vi.fn(),
     delete: vi.fn(),
     download: vi.fn(),
   },
@@ -284,6 +287,77 @@ describe('ResourceRouter', () => {
       const res = await app.request('/resources/resource-id-1/download');
 
       expect(res.headers.get('Accept-Ranges')).toBe('bytes');
+    });
+  });
+
+  describe('PATCH /resources/:id/block', () => {
+    it('should update block and keep resource id', async () => {
+      const updated = {
+        _id: 'resource-id-1',
+        block: 'new-block-id',
+        entry: 'entry-id-1',
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(resourceService.updateBlock).mockResolvedValue(updated as never);
+
+      const res = await app.request('/resources/resource-id-1/block', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newBlockId: 'new-block-id' }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(resourceService.updateBlock).toHaveBeenCalledWith('resource-id-1', { newBlockId: 'new-block-id' });
+    });
+  });
+
+  describe('GET /resources/:id/history', () => {
+    it('should return resource block history', async () => {
+      vi.mocked(resourceService.getHistory).mockResolvedValue({
+        total: 1,
+        items: [
+          {
+            _id: 'h1',
+            resourceId: 'resource-id-1',
+            fromBlockId: 'b1',
+            toBlockId: 'b2',
+            action: 'swap',
+            changedAt: Date.now(),
+            rollbackable: true,
+          },
+        ],
+      } as never);
+
+      const res = await app.request('/resources/resource-id-1/history?limit=10&offset=0');
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body.total).toBe(1);
+      expect(resourceService.getHistory).toHaveBeenCalledWith('resource-id-1', { limit: 10, offset: 0 });
+    });
+  });
+
+  describe('POST /resources/:id/rollback', () => {
+    it('should rollback by history id', async () => {
+      vi.mocked(resourceService.rollbackBlock).mockResolvedValue({
+        _id: 'resource-id-1',
+        block: 'old-block-id',
+      } as never);
+
+      const res = await app.request('/resources/resource-id-1/rollback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ historyId: 'history-id-1', changedBy: 'tester' }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(resourceService.rollbackBlock).toHaveBeenCalledWith(
+        'resource-id-1',
+        'history-id-1',
+        'tester',
+        undefined
+      );
     });
   });
 });

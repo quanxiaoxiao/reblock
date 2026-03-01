@@ -118,6 +118,9 @@ GET /health
 | GET | `/resources` | List resources (paginated) |
 | GET | `/resources/:id` | Get resource |
 | PUT | `/resources/:id` | Update resource |
+| PATCH | `/resources/:id/block` | Atomically switch resource to another block (resource ID unchanged) |
+| GET | `/resources/:id/history` | Query block change history for a resource |
+| POST | `/resources/:id/rollback` | Rollback block binding by history ID |
 | DELETE | `/resources/:id` | Delete resource |
 | GET | `/resources/:id/download` | Download (supports Range requests) |
 
@@ -167,7 +170,7 @@ npm run typecheck       # Type check
 ```bash
 npm run test            # Unit tests
 npm run test:e2e        # End-to-end tests
-npm run test:hurl       # Integration tests
+npm run test:hurl       # Hurl integration tests (auto build + auto start server on TEST_PORT, default 4362)
 npm run test:mp4        # MP4 streaming tests
 ```
 
@@ -229,11 +232,16 @@ npm run errors:repro -- --run
 # 4) Fix code, then rerun generated hurl
 hurl tests/hurl/errors/generated/repro-<error_id>.hurl --variable BASE_URL=http://localhost:4362
 
-# 5) Mark resolved after verification
+# 5) If you have request id, narrow scope quickly
+curl "http://localhost:4362/errors?days=1&status=open&requestId=<request_id>"
+
+# 6) Mark resolved after verification
 npm run errors:resolve -- --id <error_id> --resolution "Root cause fixed"
 ```
 
 `errors:repro` uses `/errors` + `/errors/:id/export` to produce a replayable hurl case.
+
+You can use `tests/hurl/errors/request-id-correlation.hurl` as a template to verify `X-Request-Id` => `/errors` => `/errors/:id` linkage.
 
 ## Configuration
 
@@ -277,6 +285,14 @@ LOG_TTL_DAYS=90
 - Metadata: name, MIME type, entry
 - **Client Tracking**: IP address, User-Agent, upload duration
 - Soft delete support
+
+**Resource Block Switch and History**:
+- Resource ID stays stable while block binding can change (`PATCH /resources/:id/block`)
+- Block switch runs in MongoDB transaction (resource update + linkCount updates + history insert)
+- Every switch writes an immutable history record
+- Rollback is supported through history (`POST /resources/:id/rollback`)
+- History query endpoint: `GET /resources/:id/history`
+- Rollback writes audit action logs before/after execution; failures are logged as `RUNTIME_ERROR` and discoverable via `/errors`
 
 **Resource Client Tracking**:
 Resources now track upload metadata for auditing and analytics:

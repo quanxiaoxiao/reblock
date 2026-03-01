@@ -79,6 +79,18 @@ export interface LogCleanupActionParams {
   error?: string;
 }
 
+export interface LogActionParams {
+  action: string;
+  success?: boolean;
+  blockId?: string | Types.ObjectId;
+  resourceIds?: (string | Types.ObjectId)[];
+  entryIds?: (string | Types.ObjectId)[];
+  details?: Record<string, any>;
+  note?: string;
+  actor?: string;
+  requestId?: string;
+}
+
 export interface MetricsSnapshot {
   windowStart: number;
   windowEnd: number;
@@ -100,6 +112,7 @@ export interface LogFilter {
   detectedBy?: string;
   fingerprint?: string;
   errorId?: string;
+  requestId?: string;
   path?: string;
   method?: string;
   errorName?: string;
@@ -243,6 +256,45 @@ export class LogService {
   }
 
   /**
+   * Log a generic resolved action entry for audit trails.
+   */
+  async logAction(params: LogActionParams): Promise<ILogEntry> {
+    const now = Date.now();
+    const success = params.success !== false;
+
+    const entry = new LogEntry({
+      timestamp: now,
+      level: success ? LogLevel.INFO : LogLevel.ERROR,
+      category: success ? LogCategory.CLEANUP_ACTION : LogCategory.CLEANUP_ERROR,
+      blockId: params.blockId ? new Types.ObjectId(params.blockId) : undefined,
+      resourceIds: params.resourceIds?.map(id => new Types.ObjectId(id)),
+      entryIds: params.entryIds?.map(id => new Types.ObjectId(id)),
+      details: {
+        action: params.action,
+        ...(params.details || {}),
+      },
+      suggestedAction: success ? 'Action completed successfully' : 'Review action failure and retry',
+      recoverable: !success,
+      dataLossRisk: success ? DataLossRisk.NONE : DataLossRisk.LOW,
+      context: {
+        detectedBy: 'system',
+        detectedAt: now,
+        environment: this.getEnvironment(),
+        requestId: params.requestId,
+      },
+      status: IssueStatus.RESOLVED,
+      resolvedAt: now,
+      resolution: params.note || (success ? 'Action executed' : 'Action failed'),
+      resolvedBy: params.actor || 'system',
+    });
+
+    await entry.save();
+    await this.writeToFile(entry, 'actions');
+
+    return entry;
+  }
+
+  /**
    * Log aggregated runtime transfer metrics snapshot
    */
   async logMetricsSnapshot(snapshot: MetricsSnapshot): Promise<ILogEntry> {
@@ -343,6 +395,12 @@ export class LogService {
     if (filter?.detectedBy) query['context.detectedBy'] = filter.detectedBy;
     if (filter?.fingerprint) query.fingerprint = filter.fingerprint;
     if (filter?.errorId) query['details.errorId'] = filter.errorId;
+    if (filter?.requestId) {
+      query.$or = [
+        { 'context.requestId': filter.requestId },
+        { 'details.requestId': filter.requestId },
+      ];
+    }
     if (filter?.path) query['details.path'] = filter.path;
     if (filter?.method) query['details.method'] = filter.method;
     if (filter?.errorName) query['details.errorName'] = filter.errorName;

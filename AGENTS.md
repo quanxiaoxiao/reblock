@@ -208,6 +208,16 @@ ResourceService and UploadService will log:
 - File access errors
 - Download failures with request context
 
+### Resource Block Change History
+
+To keep `resource._id` stable while updating the underlying block binding:
+
+- Use transactional block switching (`resource -> new block`) in service layer
+- Update both blocks' `linkCount` atomically in same transaction
+- Insert immutable `resource_history` record for each switch/rollback
+- Query history via `GET /resources/:id/history`
+- Rollback via `POST /resources/:id/rollback`
+
 ## Indexing Strategy
 
 MongoDB indexes for optimal query performance:
@@ -305,7 +315,8 @@ df.groupby([df['datetime'].dt.date, 'category']).size().unstack().plot()
 - [x] P0: Doctor integration
 - [x] P1: Cleanup integration
 - [x] P1: Log analysis tools
-- [ ] P2: Runtime service integration (ResourceService, UploadService)
+- [x] P2: Runtime service integration (ResourceService, UploadService)
+- [x] P2: Resource block history & rollback
 - [ ] P2: Archive automation
 - [ ] P2: Log restore scripts
 

@@ -13,14 +13,15 @@ HTTP 201
 error_uuid: jsonpath "$.errorId"
 
 ################################################################################
-# Test 2: Query open errors
+# Test 2: Query the specific created error in open status
 ################################################################################
-GET {{BASE_URL}}/errors?days=7&status=open
+GET {{BASE_URL}}/errors?days=7&status=open&errorId={{error_uuid}}
 HTTP 200
 [Captures]
 error_id: jsonpath "$.errors[0]._id"
 [Asserts]
 jsonpath "$.total" >= 1
+jsonpath "$.errors[0].errorId" == "{{error_uuid}}"
 
 ################################################################################
 # Test 3: Get error detail

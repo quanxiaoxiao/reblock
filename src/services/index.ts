@@ -9,6 +9,7 @@ export { auditService, AuditService } from './auditService';
 export type { 
   LogIssueParams, 
   LogCleanupActionParams, 
+  LogActionParams,
   MetricsSnapshot,
   LogFilter, 
   LogSummary 

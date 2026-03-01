@@ -101,6 +101,19 @@ export interface IResourcePopulated extends Omit<IResource, 'block' | 'entry'> {
   entry: Types.ObjectId;
 }
 
+export interface IResourceHistory extends Document {
+  _id: Types.ObjectId;
+  resourceId: Types.ObjectId;
+  fromBlockId: Types.ObjectId;
+  toBlockId: Types.ObjectId;
+  action: 'swap' | 'rollback';
+  changedAt: number;
+  changedBy?: string;
+  reason?: string;
+  requestId?: string;
+  rollbackable: boolean;
+}
+
 const resourceSchema = new Schema<IResource>({
   block: { type: Schema.Types.ObjectId, required: true, ref: 'Block', index: true },
   mime: { type: String, index: true },
@@ -118,8 +131,24 @@ const resourceSchema = new Schema<IResource>({
   uploadDuration: { type: Number },
 });
 
+const resourceHistorySchema = new Schema<IResourceHistory>({
+  resourceId: { type: Schema.Types.ObjectId, required: true, ref: 'Resource', index: true },
+  fromBlockId: { type: Schema.Types.ObjectId, required: true, ref: 'Block', index: true },
+  toBlockId: { type: Schema.Types.ObjectId, required: true, ref: 'Block', index: true },
+  action: { type: String, enum: ['swap', 'rollback'], required: true, default: 'swap' },
+  changedAt: { type: Number, default: Date.now, index: true },
+  changedBy: { type: String },
+  reason: { type: String },
+  requestId: { type: String, index: true },
+  rollbackable: { type: Boolean, default: true },
+});
+
+resourceHistorySchema.index({ resourceId: 1, changedAt: -1 });
+resourceHistorySchema.index({ toBlockId: 1, changedAt: -1 });
+
 export const Block = mongoose.model<IBlock>('Block', blockSchema);
 export const Resource = mongoose.model<IResource>('Resource', resourceSchema);
+export const ResourceHistory = mongoose.model<IResourceHistory>('ResourceHistory', resourceHistorySchema);
 export const Entry = mongoose.model<IEntry>('Entry', entrySchema);
 
 // Re-export LogEntry and types from logEntry.ts

@@ -8,6 +8,7 @@ import { env } from '../config/env';
 const ErrorListItemSchema = z.object({
   _id: z.string(),
   errorId: z.string().optional(),
+  requestId: z.string().optional(),
   fingerprint: z.string().optional(),
   timestamp: z.number(),
   occurrenceCount: z.number().optional(),
@@ -18,6 +19,7 @@ const ErrorListItemSchema = z.object({
   status: z.string(),
   details: z.object({
     errorId: z.string().optional(),
+    requestId: z.string().optional(),
     path: z.string().optional(),
     method: z.string().optional(),
     errorMessage: z.string().optional(),
@@ -91,6 +93,7 @@ const ErrorListQuerySchema = z.object({
   method: z.string().optional(),
   errorName: z.string().optional(),
   errorId: z.string().optional(),
+  requestId: z.string().optional(),
   fingerprint: z.string().optional(),
   sort: z.enum(['timestamp']).optional().default('timestamp'),
   order: z.enum(['asc', 'desc']).optional().default('desc'),
@@ -142,6 +145,7 @@ router.openapi(
       method,
       errorName,
       errorId,
+      requestId,
       fingerprint,
       order,
       limit,
@@ -171,6 +175,7 @@ router.openapi(
       method: method || undefined,
       errorName: errorName || undefined,
       errorId: errorId || undefined,
+      requestId: requestId || undefined,
       fingerprint: fingerprint || undefined,
       sortOrder: order === 'asc' ? 'asc' : 'desc',
     });
@@ -184,6 +189,7 @@ router.openapi(
       errors: paginatedErrors.map(e => ({
         _id: e._id,
         errorId: (e.details as any).errorId,
+        requestId: e.context?.requestId || (e.details as any).requestId,
         fingerprint: e.fingerprint,
         timestamp: e.timestamp,
         occurrenceCount: e.occurrenceCount,
@@ -194,6 +200,7 @@ router.openapi(
         status: e.status,
         details: {
           errorId: (e.details as any).errorId,
+          requestId: (e.details as any).requestId || e.context?.requestId,
           path: (e.details as any).path,
           method: (e.details as any).method,
           errorMessage: (e.details as any).errorMessage,
@@ -504,6 +511,7 @@ router.openapi(
             schema: z.object({
               success: z.boolean(),
               errorId: z.string(),
+              requestId: z.string(),
             }),
           },
         },
@@ -528,6 +536,7 @@ router.openapi(
 
     const { message } = await c.req.json().catch(() => ({ message: 'Test error' }));
     const errorId = crypto.randomUUID();
+    const requestId = c.req.header('x-request-id') || c.req.header('X-Request-Id') || `test-${errorId}`;
     const timestamp = Date.now();
 
     await logService.logIssue({
@@ -537,6 +546,7 @@ router.openapi(
         errorId,
         path: '/errors/test/create',
         method: 'POST',
+        requestId,
         clientIp: '127.0.0.1',
         errorMessage: message,
         errorName: 'TestError',
@@ -548,12 +558,14 @@ router.openapi(
         detectedBy: 'system',
         detectedAt: timestamp,
         environment: env.NODE_ENV as 'development' | 'production' | 'test',
+        requestId,
       },
     });
 
     return c.json({
       success: true,
       errorId,
+      requestId,
     }, 201);
   }
 );

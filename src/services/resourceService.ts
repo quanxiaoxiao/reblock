@@ -1,8 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import mongoose from 'mongoose';
-import { Resource, Block, Entry } from '../models';
-import type { IResource, IBlock } from '../models';
+import { Resource, Block, Entry, ResourceHistory } from '../models';
+import type { IResource, IBlock, IResourceHistory } from '../models';
 import type { PaginatedResult } from './types';
 import { env } from '../config/env';
 import { generateStorageName, generateIV } from '../utils/crypto';
@@ -25,6 +25,31 @@ export interface DownloadResult {
   iv: Buffer;          // 16-byte IV for decryption (from block._id)
 }
 
+export interface ResourceBlockUpdateParams {
+  newBlockId: string;
+  changedBy?: string;
+  reason?: string;
+  requestId?: string;
+  expectedUpdatedAt?: number;
+  action?: 'swap' | 'rollback';
+}
+
+export interface ResourceHistoryQueryParams {
+  limit?: number;
+  offset?: number;
+}
+
+export class ResourceMutationError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: number,
+    public readonly code?: string
+  ) {
+    super(message);
+    this.name = 'ResourceMutationError';
+  }
+}
+
 export class DownloadError extends Error {
   constructor(
     message: string,
@@ -42,13 +67,59 @@ export type IResourceWithSha256 = IResource & { sha256?: string; size?: number }
 export interface IResourceService {
   create(resourceData: Partial<IResource>): Promise<IResource>;
   update(id: string, resourceData: Partial<IResource>): Promise<IResource | null>;
+  updateBlock(id: string, params: ResourceBlockUpdateParams): Promise<IResource>;
   getById(id: string): Promise<IResourceWithSha256 | null>;
+  getHistory(id: string, params?: ResourceHistoryQueryParams): Promise<{ total: number; items: IResourceHistory[] }>;
+  rollbackBlock(id: string, historyId: string, changedBy?: string, requestId?: string): Promise<IResource>;
   list(filter?: MongoFilter, limit?: number, offset?: number): Promise<PaginatedResult<IResourceWithSha256>>;
   delete(id: string): Promise<IResource | null>;
   download(id: string, range?: { start: number; end: number }): Promise<DownloadResult>;
 }
 
 export class ResourceService implements IResourceService {
+  private transactionsSupported: boolean | null = null;
+
+  private async canUseTransactions(): Promise<boolean> {
+    if (this.transactionsSupported !== null) {
+      return this.transactionsSupported;
+    }
+
+    try {
+      const admin = mongoose.connection.db?.admin();
+      if (!admin) {
+        this.transactionsSupported = false;
+        return false;
+      }
+      const hello = await admin.command({ hello: 1 });
+      const isReplicaSet = Boolean(hello?.setName);
+      const isMongos = hello?.msg === 'isdbgrid';
+      this.transactionsSupported = isReplicaSet || isMongos;
+      return this.transactionsSupported;
+    } catch {
+      this.transactionsSupported = false;
+      return false;
+    }
+  }
+
+  private isTransactionUnsupportedError(error: unknown): boolean {
+    const errorLike = error as { message?: string; code?: number; codeName?: string };
+    const message = (errorLike?.message || '').toLowerCase();
+    const codeName = (errorLike?.codeName || '').toLowerCase();
+    const code = errorLike?.code;
+    if (!message && !codeName && typeof code !== 'number') return false;
+    return (
+      message.includes('transaction numbers are only allowed on a replica set member') ||
+      message.includes('transaction numbers are only allowed on a mongos') ||
+      message.includes('transactions are not supported') ||
+      message.includes('standalone servers do not support transactions') ||
+      message.includes('current topology does not support sessions') ||
+      message.includes('this deployment does not support retryable writes') ||
+      codeName.includes('illegaloperation') ||
+      codeName.includes('nosuchtransaction') ||
+      code === 20
+    );
+  }
+
   async create(resourceData: Partial<IResource>): Promise<IResource> {
     // Service layer injects timestamps (per timestamp-soft-delete rule)
     const resource = new Resource({
@@ -85,6 +156,257 @@ export class ResourceService implements IResourceService {
     );
 
     return updatedResource;
+  }
+
+  async updateBlock(id: string, params: ResourceBlockUpdateParams): Promise<IResource> {
+    if (!mongoose.isValidObjectId(id)) {
+      throw new ResourceMutationError('Invalid resource id', 400, 'INVALID_RESOURCE_ID');
+    }
+    if (!mongoose.isValidObjectId(params.newBlockId)) {
+      throw new ResourceMutationError('Invalid block id', 400, 'INVALID_BLOCK_ID');
+    }
+
+    const session = await mongoose.startSession();
+    let updatedResource: IResource | null = null;
+    let auditContext: { fromBlockId?: string; toBlockId?: string; changedAt?: number } = {};
+
+    try {
+      const applyMutation = async (sessionArg?: mongoose.ClientSession) => {
+        const now = Date.now();
+        const findOptions = sessionArg ? { session: sessionArg } : undefined;
+        const saveOptions = sessionArg ? { session: sessionArg } : undefined;
+        const resource = await Resource.findOne({ _id: id, isInvalid: { $ne: true } }, null, findOptions);
+        if (!resource) {
+          throw new ResourceMutationError('Resource not found', 404, 'RESOURCE_NOT_FOUND');
+        }
+
+        if (
+          typeof params.expectedUpdatedAt === 'number' &&
+          resource.updatedAt !== params.expectedUpdatedAt
+        ) {
+          throw new ResourceMutationError('Resource has been updated by another request', 409, 'VERSION_CONFLICT');
+        }
+
+        const oldBlockId = resource.block.toString();
+        const newBlockId = params.newBlockId;
+        auditContext = { fromBlockId: oldBlockId, toBlockId: newBlockId, changedAt: now };
+
+        if (oldBlockId === newBlockId) {
+          updatedResource = resource;
+          return;
+        }
+
+        const oldBlock = await Block.findOne({ _id: oldBlockId, isInvalid: { $ne: true } }, null, findOptions);
+        const newBlock = await Block.findOne({ _id: newBlockId, isInvalid: { $ne: true } }, null, findOptions);
+
+        if (!oldBlock) {
+          throw new ResourceMutationError('Old block not found', 500, 'OLD_BLOCK_NOT_FOUND');
+        }
+        if (!newBlock) {
+          throw new ResourceMutationError('New block not found', 404, 'NEW_BLOCK_NOT_FOUND');
+        }
+
+        resource.block = newBlock._id;
+        resource.updatedAt = now;
+        await resource.save(saveOptions);
+
+        newBlock.linkCount = (newBlock.linkCount || 0) + 1;
+        newBlock.updatedAt = now;
+        await newBlock.save(saveOptions);
+
+        oldBlock.linkCount = Math.max(0, (oldBlock.linkCount || 0) - 1);
+        oldBlock.updatedAt = now;
+        await oldBlock.save(saveOptions);
+
+        const history = new ResourceHistory({
+          resourceId: resource._id,
+          fromBlockId: oldBlock._id,
+          toBlockId: newBlock._id,
+          action: params.action || 'swap',
+          changedAt: now,
+          changedBy: params.changedBy || 'system',
+          reason: params.reason || 'manual update',
+          requestId: params.requestId,
+          rollbackable: true,
+        });
+        await history.save(saveOptions);
+
+        updatedResource = resource;
+      };
+
+      const useTransactions = env.NODE_ENV !== 'test' && await this.canUseTransactions();
+      if (useTransactions) {
+        try {
+          await session.withTransaction(async () => {
+            await applyMutation(session);
+          });
+        } catch (error) {
+          // Fallback for non-replica-set MongoDB (common in local/dev containers).
+          if (!this.isTransactionUnsupportedError(error)) {
+            throw error;
+          }
+          this.transactionsSupported = false;
+          await applyMutation();
+        }
+      } else {
+        await applyMutation();
+      }
+    } catch (error) {
+      try {
+        await logService.logIssue({
+          level: LogLevel.ERROR,
+          category: LogCategory.RUNTIME_ERROR,
+          resourceIds: [id],
+          details: {
+            operation: 'updateResourceBlock',
+            path: `/resources/${id}/block`,
+            method: 'PATCH',
+            resourceId: id,
+            newBlockId: params.newBlockId,
+            requestId: params.requestId,
+            changedBy: params.changedBy,
+            reason: params.reason,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          suggestedAction: 'Review block switch request and ensure blocks/resources exist',
+          recoverable: true,
+          dataLossRisk: DataLossRisk.LOW,
+          context: {
+            detectedBy: 'resourceService',
+            detectedAt: Date.now(),
+            environment: env.NODE_ENV as 'development' | 'production' | 'test',
+            requestId: params.requestId,
+            stackTrace: error instanceof Error ? error.stack : undefined,
+          },
+        });
+      } catch {
+        // Best effort logging
+      }
+      throw error;
+    } finally {
+      await session.endSession();
+    }
+
+    if (!updatedResource) {
+      throw new ResourceMutationError('Failed to update resource block', 500, 'UPDATE_BLOCK_FAILED');
+    }
+
+    try {
+      await logService.logAction({
+        action: params.action === 'rollback' ? 'resource_block_rollback_applied' : 'resource_block_swap_applied',
+        success: true,
+        resourceIds: [id],
+        blockId: auditContext.toBlockId,
+        details: {
+          resourceId: id,
+          fromBlockId: auditContext.fromBlockId,
+          toBlockId: auditContext.toBlockId,
+          changedAt: auditContext.changedAt,
+          changedBy: params.changedBy || 'system',
+          reason: params.reason || 'manual update',
+          requestId: params.requestId,
+        },
+        note: 'Resource block mutation completed',
+        actor: params.changedBy || 'system',
+        requestId: params.requestId,
+      });
+    } catch {
+      // Best effort audit logging
+    }
+
+    return updatedResource;
+  }
+
+  async getHistory(id: string, params: ResourceHistoryQueryParams = {}): Promise<{ total: number; items: IResourceHistory[] }> {
+    if (!mongoose.isValidObjectId(id)) {
+      throw new ResourceMutationError('Invalid resource id', 400, 'INVALID_RESOURCE_ID');
+    }
+
+    const limit = Math.max(1, Math.min(200, params.limit || 50));
+    const offset = Math.max(0, params.offset || 0);
+
+    const [items, total] = await Promise.all([
+      ResourceHistory.find({ resourceId: id })
+        .sort({ changedAt: -1, _id: -1 })
+        .skip(offset)
+        .limit(limit)
+        .lean()
+        .exec(),
+      ResourceHistory.countDocuments({ resourceId: id }),
+    ]);
+
+    return { total, items: items as IResourceHistory[] };
+  }
+
+  async rollbackBlock(
+    id: string,
+    historyId: string,
+    changedBy: string = 'system',
+    requestId?: string
+  ): Promise<IResource> {
+    if (!mongoose.isValidObjectId(id)) {
+      throw new ResourceMutationError('Invalid resource id', 400, 'INVALID_RESOURCE_ID');
+    }
+    if (!mongoose.isValidObjectId(historyId)) {
+      throw new ResourceMutationError('Invalid history id', 400, 'INVALID_HISTORY_ID');
+    }
+
+    const target = await ResourceHistory.findOne({ _id: historyId, resourceId: id, rollbackable: true }).lean().exec();
+    if (!target) {
+      throw new ResourceMutationError('Rollback target not found', 404, 'ROLLBACK_TARGET_NOT_FOUND');
+    }
+
+    try {
+      await logService.logAction({
+        action: 'resource_block_rollback_started',
+        success: true,
+        resourceIds: [id],
+        blockId: target.fromBlockId.toString(),
+        details: {
+          resourceId: id,
+          historyId,
+          fromBlockId: target.toBlockId.toString(),
+          toBlockId: target.fromBlockId.toString(),
+          requestId,
+        },
+        note: 'Rollback requested',
+        actor: changedBy,
+        requestId,
+      });
+    } catch {
+      // Best effort audit logging
+    }
+
+    const rolledBack = await this.updateBlock(id, {
+      newBlockId: target.fromBlockId.toString(),
+      changedBy,
+      requestId,
+      action: 'rollback',
+      reason: `rollback from history ${historyId}`,
+    });
+
+    try {
+      await logService.logAction({
+        action: 'resource_block_rollback_completed',
+        success: true,
+        resourceIds: [id],
+        blockId: target.fromBlockId.toString(),
+        details: {
+          resourceId: id,
+          historyId,
+          restoredBlockId: target.fromBlockId.toString(),
+          replacedBlockId: target.toBlockId.toString(),
+          requestId,
+        },
+        note: 'Rollback completed',
+        actor: changedBy,
+        requestId,
+      });
+    } catch {
+      // Best effort audit logging
+    }
+
+    return rolledBack;
   }
 
   async getById(id: string): Promise<(IResource & { sha256?: string }) | null> {

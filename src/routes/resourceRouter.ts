@@ -5,7 +5,7 @@ import { Readable, PassThrough } from 'stream';
 import { pipeline } from 'stream/promises';
 import { resourceService, logService } from '../services';
 import { metricsSnapshotService } from '../services/metricsSnapshotService';
-import { DownloadError } from '../services/resourceService';
+import { DownloadError, ResourceMutationError } from '../services/resourceService';
 import { createDecryptStream, createDecryptStreamWithOffset } from '../utils/crypto';
 import { env } from '../config/env';
 import { LogLevel, LogCategory, DataLossRisk } from '../models/logEntry';
@@ -58,6 +58,24 @@ const PaginatedResourceListSchema = z.object({
   offset: z.number().optional(),
 });
 
+const ResourceHistoryItemSchema = z.object({
+  _id: z.string(),
+  resourceId: z.string(),
+  fromBlockId: z.string(),
+  toBlockId: z.string(),
+  action: z.enum(['swap', 'rollback']),
+  changedAt: z.number(),
+  changedBy: z.string().optional(),
+  reason: z.string().optional(),
+  requestId: z.string().optional(),
+  rollbackable: z.boolean(),
+});
+
+const ResourceHistoryListSchema = z.object({
+  total: z.number(),
+  items: z.array(ResourceHistoryItemSchema),
+});
+
 const router = new OpenAPIHono();
 
 // Create Resource
@@ -99,6 +117,167 @@ router.openapi(
     const body = await c.req.json();
     const result = await resourceService.create(body);
     return c.json(result, 201);
+  }
+);
+
+// Update Resource Block with transaction and history tracking
+router.openapi(
+  createRoute({
+    method: 'patch',
+    path: '/:id/block',
+    tags: ['Resources'],
+    description: 'Update resource block while keeping resource ID stable',
+    request: {
+      params: z.object({
+        id: z.string().openapi({
+          param: { name: 'id', in: 'path' },
+          example: '507f1f77bcf86cd799439011',
+        }),
+      }),
+      body: {
+        content: {
+          'application/json': {
+            schema: z.object({
+              newBlockId: z.string(),
+              changedBy: z.string().optional(),
+              reason: z.string().optional(),
+              requestId: z.string().optional(),
+              expectedUpdatedAt: z.number().optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: 'Block updated successfully',
+        content: {
+          'application/json': { schema: ResourceSchema },
+        },
+      },
+      400: { description: 'Invalid input', content: { 'application/json': { schema: ErrorSchema } } },
+      404: { description: 'Resource or block not found', content: { 'application/json': { schema: ErrorSchema } } },
+      409: { description: 'Version conflict', content: { 'application/json': { schema: ErrorSchema } } },
+    },
+  }),
+  async (c: Context) => {
+    const id = c.req.param('id');
+    const body = await c.req.json();
+    try {
+      const updated = await resourceService.updateBlock(id, body);
+      return c.json(updated);
+    } catch (error) {
+      if (error instanceof ResourceMutationError) {
+        return c.json({ error: error.message, code: error.code }, error.statusCode as 400 | 404 | 409 | 500);
+      }
+      throw error;
+    }
+  }
+);
+
+// Get Resource Block Change History
+router.openapi(
+  createRoute({
+    method: 'get',
+    path: '/:id/history',
+    tags: ['Resources'],
+    description: 'Get block change history for a resource',
+    request: {
+      params: z.object({
+        id: z.string().openapi({
+          param: { name: 'id', in: 'path' },
+          example: '507f1f77bcf86cd799439011',
+        }),
+      }),
+      query: z.object({
+        limit: z.string().optional().openapi({
+          param: { name: 'limit', in: 'query' },
+          example: '50',
+        }),
+        offset: z.string().optional().openapi({
+          param: { name: 'offset', in: 'query' },
+          example: '0',
+        }),
+      }),
+    },
+    responses: {
+      200: {
+        description: 'Resource history',
+        content: {
+          'application/json': { schema: ResourceHistoryListSchema },
+        },
+      },
+      400: { description: 'Invalid resource id', content: { 'application/json': { schema: ErrorSchema } } },
+    },
+  }),
+  async (c: Context) => {
+    const id = c.req.param('id');
+    const limitParam = c.req.query('limit');
+    const offsetParam = c.req.query('offset');
+    try {
+      const result = await resourceService.getHistory(id, {
+        limit: limitParam ? parseInt(limitParam, 10) : undefined,
+        offset: offsetParam ? parseInt(offsetParam, 10) : undefined,
+      });
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof ResourceMutationError) {
+        return c.json({ error: error.message, code: error.code }, error.statusCode as 400 | 404 | 409 | 500);
+      }
+      throw error;
+    }
+  }
+);
+
+// Rollback Resource Block by History record
+router.openapi(
+  createRoute({
+    method: 'post',
+    path: '/:id/rollback',
+    tags: ['Resources'],
+    description: 'Rollback resource block to previous block from a history record',
+    request: {
+      params: z.object({
+        id: z.string().openapi({
+          param: { name: 'id', in: 'path' },
+          example: '507f1f77bcf86cd799439011',
+        }),
+      }),
+      body: {
+        content: {
+          'application/json': {
+            schema: z.object({
+              historyId: z.string(),
+              changedBy: z.string().optional(),
+              requestId: z.string().optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: 'Rollback succeeded',
+        content: {
+          'application/json': { schema: ResourceSchema },
+        },
+      },
+      400: { description: 'Invalid input', content: { 'application/json': { schema: ErrorSchema } } },
+      404: { description: 'History not found', content: { 'application/json': { schema: ErrorSchema } } },
+    },
+  }),
+  async (c: Context) => {
+    const id = c.req.param('id');
+    const body = await c.req.json();
+    try {
+      const updated = await resourceService.rollbackBlock(id, body.historyId, body.changedBy, body.requestId);
+      return c.json(updated);
+    } catch (error) {
+      if (error instanceof ResourceMutationError) {
+        return c.json({ error: error.message, code: error.code }, error.statusCode as 400 | 404 | 409 | 500);
+      }
+      throw error;
+    }
   }
 );
 

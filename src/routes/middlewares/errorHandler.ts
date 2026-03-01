@@ -22,7 +22,7 @@ export async function errorHandler(c: Context, next: Next) {
     const clientIp = (c.get('clientIp') as string) || 'unknown';
     const headers = (c.get('sanitizedHeaders') as Record<string, string>) || {};
     const body = c.get('requestBody');
-    const requestId = c.req.header('x-request-id') || errorId;
+    const requestId = c.req.header('x-request-id') || c.req.header('X-Request-Id') || errorId;
     const fingerprint = createHash('sha256')
       .update(`${method}|${path}|${statusCode}|${error.name}|${error.message}`)
       .digest('hex')
