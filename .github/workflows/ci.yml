@@ -36,6 +36,12 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      PORT: '3000'
+      MONGO_HOSTNAME: localhost
+      MONGO_DATABASE: reblock_test
+      ENCRYPTION_KEY: test-encryption-key-32-chars-min
 
     steps:
       - name: Checkout code

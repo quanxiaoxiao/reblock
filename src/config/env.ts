@@ -3,6 +3,20 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const isTestRuntime = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+
+const runtimeEnv: Record<string, string | undefined> = {
+  ...process.env,
+};
+
+// Provide safe defaults for test runtime so unit tests do not require a local .env file.
+if (isTestRuntime) {
+  runtimeEnv.PORT ??= '3000';
+  runtimeEnv.MONGO_HOSTNAME ??= 'localhost';
+  runtimeEnv.MONGO_DATABASE ??= 'reblock_test';
+  runtimeEnv.ENCRYPTION_KEY ??= 'test-encryption-key-32-chars-min';
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.string().transform(Number).optional(),
@@ -38,10 +52,13 @@ const envSchema = z.object({
   path: ['PORT'],
 });
 
-const envServer = envSchema.safeParse(process.env);
+const envServer = envSchema.safeParse(runtimeEnv);
 
 if (!envServer.success) {
   console.error('❌ Invalid environment variables:', envServer.error.format());
+  if (isTestRuntime) {
+    throw new Error('Invalid environment variables in test runtime');
+  }
   process.exit(1);
 }
 
