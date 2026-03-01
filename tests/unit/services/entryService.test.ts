@@ -151,7 +151,25 @@ describe('EntryService', () => {
       const result = await service.getById('entry-id-1');
 
       expect(Entry.findOne).toHaveBeenCalledWith({
-        _id: 'entry-id-1',
+        alias: 'entry-id-1',
+        isInvalid: { $ne: true },
+      });
+      expect(result).toEqual(mockEntry);
+    });
+
+    it('should query by _id for valid ObjectId strings', async () => {
+      const mockEntry = {
+        _id: '507f1f77bcf86cd799439011',
+        name: 'Test Entry',
+        isInvalid: false,
+      };
+
+      vi.mocked(Entry.findOne).mockResolvedValue(mockEntry as never);
+
+      const result = await service.getById('507f1f77bcf86cd799439011');
+
+      expect(Entry.findOne).toHaveBeenCalledWith({
+        _id: '507f1f77bcf86cd799439011',
         isInvalid: { $ne: true },
       });
       expect(result).toEqual(mockEntry);

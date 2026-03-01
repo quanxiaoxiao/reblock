@@ -3,6 +3,7 @@ import type { IEntry } from '../models';
 import type { PaginatedResult } from './types';
 import { logService } from './logService';
 import { LogLevel, LogCategory, DataLossRisk } from '../models/logEntry';
+import mongoose from 'mongoose';
 
 // MongoDB filter type - allows flexible query objects
 type MongoFilter = Record<string, unknown>;
@@ -101,7 +102,11 @@ export class EntryService implements IEntryService {
   }
 
   async getById(id: string): Promise<IEntry | null> {
-    return Entry.findOne({ _id: id, isInvalid: { $ne: true } });
+    const isValidObjectId = mongoose.isValidObjectId(id);
+    const query = isValidObjectId
+      ? { _id: id, isInvalid: { $ne: true } }
+      : { alias: id, isInvalid: { $ne: true } };
+    return Entry.findOne(query);
   }
 
   async getDefault(): Promise<IEntry | null> {
