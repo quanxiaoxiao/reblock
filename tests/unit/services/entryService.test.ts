@@ -376,6 +376,190 @@ describe('EntryService', () => {
       expect(updateArg).not.toHaveProperty('invalidatedAt', 123456);
       expect(updateArg).toHaveProperty('updatedAt');
     });
+
+    it('should update uploadConfig with maxFileSize', async () => {
+      const existingEntry = {
+        _id: 'entry-id-1',
+        name: 'Entry 1',
+        isInvalid: false,
+      };
+
+      const updatedEntry = {
+        ...existingEntry,
+        uploadConfig: {
+          maxFileSize: 10485760,
+        },
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(Entry.findOne).mockResolvedValue(existingEntry as never);
+      vi.mocked(Entry.findByIdAndUpdate).mockResolvedValue(updatedEntry as never);
+
+      const result = await service.update('entry-id-1', {
+        uploadConfig: { maxFileSize: 10485760 },
+      });
+
+      expect(result?.uploadConfig?.maxFileSize).toBe(10485760);
+      const updateArg = vi.mocked(Entry.findByIdAndUpdate).mock.calls[0][1] as Record<string, unknown>;
+      expect(updateArg.uploadConfig).toEqual({ maxFileSize: 10485760 });
+    });
+
+    it('should update uploadConfig with allowedMimeTypes', async () => {
+      const existingEntry = {
+        _id: 'entry-id-1',
+        name: 'Entry 1',
+        isInvalid: false,
+      };
+
+      const updatedEntry = {
+        ...existingEntry,
+        uploadConfig: {
+          allowedMimeTypes: ['image/jpeg', 'image/png'],
+        },
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(Entry.findOne).mockResolvedValue(existingEntry as never);
+      vi.mocked(Entry.findByIdAndUpdate).mockResolvedValue(updatedEntry as never);
+
+      const result = await service.update('entry-id-1', {
+        uploadConfig: { allowedMimeTypes: ['image/jpeg', 'image/png'] },
+      });
+
+      expect(result?.uploadConfig?.allowedMimeTypes).toEqual(['image/jpeg', 'image/png']);
+    });
+
+    it('should update uploadConfig with readOnly flag', async () => {
+      const existingEntry = {
+        _id: 'entry-id-1',
+        name: 'Entry 1',
+        isInvalid: false,
+      };
+
+      const updatedEntry = {
+        ...existingEntry,
+        uploadConfig: {
+          readOnly: true,
+        },
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(Entry.findOne).mockResolvedValue(existingEntry as never);
+      vi.mocked(Entry.findByIdAndUpdate).mockResolvedValue(updatedEntry as never);
+
+      const result = await service.update('entry-id-1', {
+        uploadConfig: { readOnly: true },
+      });
+
+      expect(result?.uploadConfig?.readOnly).toBe(true);
+    });
+
+    it('should update uploadConfig with complete configuration', async () => {
+      const existingEntry = {
+        _id: 'entry-id-1',
+        name: 'Entry 1',
+        isInvalid: false,
+      };
+
+      const updatedEntry = {
+        ...existingEntry,
+        uploadConfig: {
+          maxFileSize: 20971520,
+          allowedMimeTypes: ['image/*', 'application/pdf'],
+          readOnly: true,
+        },
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(Entry.findOne).mockResolvedValue(existingEntry as never);
+      vi.mocked(Entry.findByIdAndUpdate).mockResolvedValue(updatedEntry as never);
+
+      const result = await service.update('entry-id-1', {
+        uploadConfig: {
+          maxFileSize: 20971520,
+          allowedMimeTypes: ['image/*', 'application/pdf'],
+          readOnly: true,
+        },
+      });
+
+      expect(result?.uploadConfig).toEqual({
+        maxFileSize: 20971520,
+        allowedMimeTypes: ['image/*', 'application/pdf'],
+        readOnly: true,
+      });
+    });
+
+    it('should update isDefault and uploadConfig together', async () => {
+      const existingEntry = {
+        _id: 'entry-id-1',
+        name: 'Entry 1',
+        isDefault: false,
+        isInvalid: false,
+      };
+
+      const updatedEntry = {
+        ...existingEntry,
+        isDefault: true,
+        uploadConfig: {
+          maxFileSize: 5242880,
+        },
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(Entry.findOne).mockResolvedValue(existingEntry as never);
+      vi.mocked(Entry.updateMany).mockResolvedValue({ modifiedCount: 1 } as never);
+      vi.mocked(Entry.findByIdAndUpdate).mockResolvedValue(updatedEntry as never);
+
+      const result = await service.update('entry-id-1', {
+        isDefault: true,
+        uploadConfig: { maxFileSize: 5242880 },
+      });
+
+      expect(result?.isDefault).toBe(true);
+      expect(result?.uploadConfig?.maxFileSize).toBe(5242880);
+      expect(Entry.updateMany).toHaveBeenCalledWith(
+        { _id: { $ne: 'entry-id-1' }, isDefault: true, isInvalid: false },
+        { isDefault: false, updatedAt: expect.any(Number) }
+      );
+    });
+
+    it('should update name, alias, and uploadConfig together', async () => {
+      const existingEntry = {
+        _id: 'entry-id-1',
+        name: 'Old Name',
+        alias: 'old-alias',
+        isInvalid: false,
+      };
+
+      const updatedEntry = {
+        _id: 'entry-id-1',
+        name: 'New Name',
+        alias: 'new-alias',
+        uploadConfig: {
+          maxFileSize: 10485760,
+          allowedMimeTypes: ['image/jpeg'],
+        },
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(Entry.findOne)
+        .mockResolvedValueOnce(existingEntry as never)
+        .mockResolvedValueOnce(null as never); // No duplicate alias
+      vi.mocked(Entry.findByIdAndUpdate).mockResolvedValue(updatedEntry as never);
+
+      const result = await service.update('entry-id-1', {
+        name: 'New Name',
+        alias: 'new-alias',
+        uploadConfig: {
+          maxFileSize: 10485760,
+          allowedMimeTypes: ['image/jpeg'],
+        },
+      });
+
+      expect(result?.name).toBe('New Name');
+      expect(result?.alias).toBe('new-alias');
+      expect(result?.uploadConfig?.maxFileSize).toBe(10485760);
+    });
   });
 
   describe('delete', () => {

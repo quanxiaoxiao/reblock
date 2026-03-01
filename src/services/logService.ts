@@ -43,6 +43,10 @@ function getActionsDir(): string {
   return join(getLogDir(), 'actions');
 }
 
+function getMetricsDir(): string {
+  return join(getLogDir(), 'metrics');
+}
+
 function getArchiveDir(): string {
   return join(getLogDir(), 'archive');
 }
@@ -73,6 +77,18 @@ export interface LogCleanupActionParams {
   newState: Record<string, any>;
   success: boolean;
   error?: string;
+}
+
+export interface MetricsSnapshot {
+  windowStart: number;
+  windowEnd: number;
+  windowMinutes: number;
+  uploadCount: number;
+  downloadCount: number;
+  uploadBytes: number;
+  downloadBytes: number;
+  uploadInterruptedCount: number;
+  downloadInterruptedCount: number;
 }
 
 // Interface for log filter
@@ -177,6 +193,36 @@ export class LogService {
 
     await entry.save();
     await this.writeToFile(entry, 'actions');
+
+    return entry;
+  }
+
+  /**
+   * Log aggregated runtime transfer metrics snapshot
+   */
+  async logMetricsSnapshot(snapshot: MetricsSnapshot): Promise<ILogEntry> {
+    const now = Date.now();
+    const entry = new LogEntry({
+      timestamp: now,
+      level: LogLevel.INFO,
+      category: LogCategory.METRICS_SNAPSHOT,
+      details: snapshot,
+      suggestedAction: 'Metrics snapshot recorded',
+      recoverable: false,
+      dataLossRisk: DataLossRisk.NONE,
+      context: {
+        detectedBy: 'system',
+        detectedAt: now,
+        environment: this.getEnvironment(),
+      },
+      status: IssueStatus.RESOLVED,
+      resolvedAt: now,
+      resolution: 'Snapshot saved',
+      resolvedBy: 'metrics-scheduler',
+    });
+
+    await entry.save();
+    await this.writeToFile(entry, 'metrics');
 
     return entry;
   }
@@ -365,10 +411,10 @@ export class LogService {
   /**
    * Write log entry to JSON Lines file
    */
-  private async writeToFile(entry: ILogEntry, subdir: 'issues' | 'actions'): Promise<void> {
+  private async writeToFile(entry: ILogEntry, subdir: 'issues' | 'actions' | 'metrics'): Promise<void> {
     try {
       const date = new Date().toISOString().split('T')[0];
-      const dir = subdir === 'issues' ? getIssuesDir() : getActionsDir();
+      const dir = subdir === 'issues' ? getIssuesDir() : subdir === 'actions' ? getActionsDir() : getMetricsDir();
       const filePath = join(dir, `${date}.jsonl`);
 
       // Ensure directory exists
@@ -507,7 +553,7 @@ export class LogService {
       await mkdir(getArchiveDir(), { recursive: true });
 
       // Process both issues and actions directories
-      const dirs = [getIssuesDir(), getActionsDir()];
+      const dirs = [getIssuesDir(), getActionsDir(), getMetricsDir()];
       
       for (const dir of dirs) {
         try {

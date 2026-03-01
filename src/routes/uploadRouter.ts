@@ -5,6 +5,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { uploadService, UploadBusinessError } from '../services/uploadService';
 import { entryService, logService, auditService } from '../services';
+import { metricsSnapshotService } from '../services/metricsSnapshotService';
 import { env } from '../config/env';
 import { LogLevel, LogCategory, DataLossRisk } from '../models/logEntry';
 
@@ -129,6 +130,7 @@ router.openapi(
     // Generate temp file path
     const tempFileName = generateTempFileName();
     const tempFilePath = path.join(tempDir, tempFileName);
+    let uploadSize = 0;
     
     try {
       // Stream request body to temp file (no buffering)
@@ -157,6 +159,7 @@ router.openapi(
         await fs.unlink(tempFilePath);
         return c.json({ error: 'Empty file' }, 400);
       }
+      uploadSize = stats.size;
 
       // Get name from query parameter
       const name = c.req.query('name')?.trim();
@@ -175,9 +178,13 @@ router.openapi(
         clientIp,
         userAgent
       );
+
+      metricsSnapshotService.recordUploadSuccess(uploadSize);
       
       return c.json(resource, 201);
     } catch (error) {
+      metricsSnapshotService.recordUploadInterrupted();
+
       // Clean up temp file on error
       try {
         await fs.unlink(tempFilePath);

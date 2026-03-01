@@ -23,12 +23,19 @@ const CreateEntrySchema = z.object({
   description: z.string().optional(),
 });
 
+const UploadConfigSchema = z.object({
+  maxFileSize: z.number().optional(),
+  allowedMimeTypes: z.array(z.string()).optional(),
+  readOnly: z.boolean().optional(),
+}).optional();
+
 const UpdateEntrySchema = z.object({
   name: z.string().min(1).optional(),
   alias: z.string().optional(),
   isDefault: z.boolean().optional(),
   order: z.number().optional(),
   description: z.string().optional(),
+  uploadConfig: UploadConfigSchema,
 });
 
 const ErrorSchema = z.object({
