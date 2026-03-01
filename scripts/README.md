@@ -159,3 +159,23 @@ This is useful for:
 - [Main README](../../README.md)
 - [Doctor Script](../doctor.mjs) - Health diagnostics
 - [Log Analysis](../logs-analyze.mjs) - Log inspection
+
+## Runtime Error Workflow
+
+For server-side 500 debugging with reproducible requests:
+
+```bash
+# Query latest open errors
+npm run errors:fetch -- --status open --days 1
+
+# Generate hurl from /errors export (latest open by default)
+npm run errors:repro
+
+# Generate + execute hurl in one step
+npm run errors:repro -- --run
+
+# Resolve after fix
+npm run errors:resolve -- --id <error_id> --resolution "fixed by ..."
+```
+
+Generated files are stored under `tests/hurl/errors/generated/`.

@@ -177,6 +177,9 @@ npm run test:mp4        # MP4 streaming tests
 npm run doctor          # Health check
 npm run cleanup         # Clean up orphaned data
 npm run logs:analyze    # Analyze logs
+npm run errors:fetch    # Query runtime 500 errors
+npm run errors:repro    # Generate hurl from latest open 500 error
+npm run errors:resolve  # Mark error as resolved
 ```
 
 ### Doctor Script
@@ -208,6 +211,29 @@ npm run logs:analyze                  # Last 7 days
 npm run logs:analyze -- --days 30     # Last 30 days
 npm run logs:analyze -- --category MISSING_FILE
 ```
+
+### 500 Error Debug Loop
+
+Recommended closed-loop for server-side 500 issues:
+
+```bash
+# 1) Detect open runtime 500 errors
+npm run errors:fetch -- --days 1 --status open
+
+# 2) Generate reproducible hurl from latest open error
+npm run errors:repro
+
+# 3) Or generate and run immediately
+npm run errors:repro -- --run
+
+# 4) Fix code, then rerun generated hurl
+hurl tests/hurl/errors/generated/repro-<error_id>.hurl --variable BASE_URL=http://localhost:4362
+
+# 5) Mark resolved after verification
+npm run errors:resolve -- --id <error_id> --resolution "Root cause fixed"
+```
+
+`errors:repro` uses `/errors` + `/errors/:id/export` to produce a replayable hurl case.
 
 ## Configuration
 

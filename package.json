@@ -41,6 +41,7 @@
     "logs:analyze": "node scripts/logs-analyze.mjs",
     "errors:fetch": "node scripts/errors-fetch.mjs",
     "errors:resolve": "node scripts/errors-resolve.mjs",
+    "errors:repro": "node scripts/errors-repro.mjs",
     "resource:corrupt": "node scripts/resource-corrupt.mjs",
     "resource:report": "node scripts/resource-report.mjs",
     "resource:test": "node scripts/resource-test-suite.mjs",
