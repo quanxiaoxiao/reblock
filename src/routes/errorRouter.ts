@@ -8,7 +8,11 @@ import { env } from '../config/env';
 const ErrorListItemSchema = z.object({
   _id: z.string(),
   errorId: z.string().optional(),
+  fingerprint: z.string().optional(),
   timestamp: z.number(),
+  occurrenceCount: z.number().optional(),
+  firstSeenAt: z.number().optional(),
+  lastSeenAt: z.number().optional(),
   level: z.string(),
   category: z.string(),
   status: z.string(),
@@ -63,6 +67,7 @@ const ErrorExportSchema = z.object({
   reproduction: z.object({
     method: z.string(),
     path: z.string(),
+    expectedStatus: z.number().optional(),
     timestamp: z.string(),
     headers: z.record(z.string(), z.string()).optional(),
     query: z.record(z.string(), z.string()).optional(),
@@ -82,6 +87,13 @@ const ErrorListQuerySchema = z.object({
   days: z.string().optional().default('7'),
   status: z.enum(['open', 'acknowledged', 'resolved', 'all']).optional().default('open'),
   includeResolved: z.string().optional().default('false'),
+  path: z.string().optional(),
+  method: z.string().optional(),
+  errorName: z.string().optional(),
+  errorId: z.string().optional(),
+  fingerprint: z.string().optional(),
+  sort: z.enum(['timestamp']).optional().default('timestamp'),
+  order: z.enum(['asc', 'desc']).optional().default('desc'),
   limit: z.string().optional().default('100'),
   offset: z.string().optional().default('0'),
 });
@@ -122,7 +134,19 @@ router.openapi(
     },
   }),
   async (c: Context) => {
-    const { days, status, includeResolved, limit, offset } = c.req.query();
+    const {
+      days,
+      status,
+      includeResolved,
+      path,
+      method,
+      errorName,
+      errorId,
+      fingerprint,
+      order,
+      limit,
+      offset
+    } = c.req.query();
     
     const daysNum = parseInt(days) || 7;
     const limitNum = parseInt(limit) || 100;
@@ -141,7 +165,15 @@ router.openapi(
       filter.status = { $ne: IssueStatus.RESOLVED };
     }
     
-    const errors = await logService.findRecent(daysNum, filter);
+    const errors = await logService.findRecent(daysNum, {
+      ...filter,
+      path: path || undefined,
+      method: method || undefined,
+      errorName: errorName || undefined,
+      errorId: errorId || undefined,
+      fingerprint: fingerprint || undefined,
+      sortOrder: order === 'asc' ? 'asc' : 'desc',
+    });
     
     // Apply pagination
     const total = errors.length;
@@ -152,7 +184,11 @@ router.openapi(
       errors: paginatedErrors.map(e => ({
         _id: e._id,
         errorId: (e.details as any).errorId,
+        fingerprint: e.fingerprint,
         timestamp: e.timestamp,
+        occurrenceCount: e.occurrenceCount,
+        firstSeenAt: e.firstSeenAt,
+        lastSeenAt: e.lastSeenAt,
         level: e.level,
         category: e.category,
         status: e.status,
@@ -286,6 +322,7 @@ router.openapi(
       reproduction: {
         method: details.method || 'GET',
         path: details.path || '/',
+        expectedStatus: typeof details.httpStatus === 'number' ? details.httpStatus : 500,
         timestamp: new Date(error.timestamp).toISOString(),
         headers: details.headers,
         query: details.query,

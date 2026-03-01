@@ -50,7 +50,7 @@ function parseArgs() {
     id: null,
     days: 7,
     status: 'open',
-    expectStatus: 500,
+    expectStatus: null,
     output: null,
     run: false,
     server: DEFAULT_SERVER,
@@ -180,7 +180,12 @@ function generateHurl(errorId, exported, options) {
     lines.push(JSON.stringify(repro.body, null, 2));
   }
 
-  lines.push(`HTTP ${options.expectStatus}`);
+  const expectedStatus = Number.isInteger(options.expectStatus)
+    ? options.expectStatus
+    : Number.isInteger(repro.expectedStatus)
+      ? repro.expectedStatus
+      : 500;
+  lines.push(`HTTP ${expectedStatus}`);
 
   return lines.join('\n') + '\n';
 }

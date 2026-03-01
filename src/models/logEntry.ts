@@ -117,6 +117,10 @@ export interface ILogEntry extends Document {
   
   // Dynamic details based on category
   details: Record<string, any>;
+  fingerprint?: string;
+  occurrenceCount?: number;
+  firstSeenAt?: number;
+  lastSeenAt?: number;
   
   // Actual state at detection
   actualState?: IActualState;
@@ -205,6 +209,16 @@ const logEntrySchema = new Schema<ILogEntry>({
     type: Schema.Types.Mixed, 
     default: {} 
   },
+  fingerprint: {
+    type: String,
+    index: true,
+  },
+  occurrenceCount: {
+    type: Number,
+    default: 1,
+  },
+  firstSeenAt: Number,
+  lastSeenAt: Number,
   
   // Actual detected state
   actualState: {
@@ -290,6 +304,7 @@ logEntrySchema.index({ blockId: 1, timestamp: -1 });
 logEntrySchema.index({ 'context.detectedBy': 1, timestamp: -1 });
 logEntrySchema.index({ level: 1, timestamp: -1 });
 logEntrySchema.index({ status: 1, timestamp: -1 });
+logEntrySchema.index({ category: 1, fingerprint: 1, status: 1, timestamp: -1 });
 
 // TTL index - automatically delete after LOG_TTL_DAYS
 logEntrySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });

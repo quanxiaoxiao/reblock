@@ -98,8 +98,14 @@ export interface LogFilter {
   status?: IssueStatus;
   blockId?: string;
   detectedBy?: string;
+  fingerprint?: string;
+  errorId?: string;
+  path?: string;
+  method?: string;
+  errorName?: string;
   startDate?: Date;
   endDate?: Date;
+  sortOrder?: 'asc' | 'desc';
 }
 
 // Interface for summary report
@@ -124,22 +130,61 @@ export class LogService {
    * Stores in both MongoDB and file system
    */
   async logIssue(params: LogIssueParams): Promise<ILogEntry> {
+    const now = Date.now();
+    const fingerprint = typeof params.details?.fingerprint === 'string' ? params.details.fingerprint : undefined;
+    const dedupWindowMinutes = Number.isFinite(env.LOG_DEDUP_WINDOW_MINUTES) ? env.LOG_DEDUP_WINDOW_MINUTES : 10;
+    const dedupWindowMs = Math.max(1, dedupWindowMinutes) * 60 * 1000;
+
+    // Runtime errors can be noisy. Aggregate repeated issues with the same fingerprint in short windows.
+    if (params.category === LogCategory.RUNTIME_ERROR && fingerprint) {
+      const existing = await LogEntry.findOne({
+        category: params.category,
+        fingerprint,
+        status: { $in: [IssueStatus.OPEN, IssueStatus.ACKNOWLEDGED] },
+        timestamp: { $gte: now - dedupWindowMs },
+      });
+
+      if (existing) {
+        existing.timestamp = now;
+        existing.lastSeenAt = now;
+        existing.occurrenceCount = (existing.occurrenceCount || 1) + 1;
+        existing.details = {
+          ...existing.details,
+          latest: params.details,
+        };
+        existing.context = {
+          ...existing.context,
+          detectedAt: now,
+          requestId: params.context?.requestId || existing.context.requestId,
+          userAgent: params.context?.userAgent || existing.context.userAgent,
+        };
+
+        await existing.save();
+        await this.writeToFile(existing, 'issues');
+        return existing;
+      }
+    }
+
     // Build the log entry
     const entry = new LogEntry({
-      timestamp: Date.now(),
+      timestamp: now,
       level: params.level,
       category: params.category,
       blockId: params.blockId ? new Types.ObjectId(params.blockId) : undefined,
       resourceIds: params.resourceIds?.map(id => new Types.ObjectId(id)),
       entryIds: params.entryIds?.map(id => new Types.ObjectId(id)),
       details: params.details,
+      fingerprint,
+      occurrenceCount: 1,
+      firstSeenAt: now,
+      lastSeenAt: now,
       suggestedAction: params.suggestedAction,
       recoverable: params.recoverable,
       dataLossRisk: params.dataLossRisk || DataLossRisk.NONE,
       recoverySteps: params.recoverySteps,
       context: {
         detectedBy: params.context?.detectedBy || 'system',
-        detectedAt: Date.now(),
+        detectedAt: now,
         scriptVersion: params.context?.scriptVersion,
         serverVersion: params.context?.serverVersion,
         environment: params.context?.environment || this.getEnvironment(),
@@ -296,9 +341,14 @@ export class LogService {
     if (filter?.status) query.status = filter.status;
     if (filter?.blockId) query.blockId = new Types.ObjectId(filter.blockId);
     if (filter?.detectedBy) query['context.detectedBy'] = filter.detectedBy;
+    if (filter?.fingerprint) query.fingerprint = filter.fingerprint;
+    if (filter?.errorId) query['details.errorId'] = filter.errorId;
+    if (filter?.path) query['details.path'] = filter.path;
+    if (filter?.method) query['details.method'] = filter.method;
+    if (filter?.errorName) query['details.errorName'] = filter.errorName;
 
     return LogEntry.find(query)
-      .sort({ timestamp: -1 })
+      .sort({ timestamp: filter?.sortOrder === 'asc' ? 1 : -1 })
       .exec();
   }
 

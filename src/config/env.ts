@@ -40,6 +40,7 @@ const envSchema = z.object({
 
   LOG_TTL_DAYS: z.string().default('90').transform(Number),
   LOG_ARCHIVE_DAYS: z.string().default('30').transform(Number),
+  LOG_DEDUP_WINDOW_MINUTES: z.string().default('10').transform(Number),
   CASCADE_DELETE_LOG_DAYS: z.string().default('30').transform(Number),
   METRICS_SNAPSHOT_INTERVAL_MINUTES: z.string().default('5').transform(Number),
   METRICS_WINDOW_MINUTES: z.string().default('5').transform(Number),
