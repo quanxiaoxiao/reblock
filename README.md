@@ -194,17 +194,17 @@ Detects data integrity issues:
 - Duplicate SHA256 hashes
 
 ```bash
-node scripts/doctor.mjs              # Check all blocks
-node scripts/doctor.mjs --issues-only # Show only issues
-node scripts/doctor.mjs --json        # JSON output
+npm run doctor                        # Check all blocks
+npm run doctor -- --issues-only       # Show only issues
+npm run doctor -- --json              # JSON output
 ```
 
 ### Cleanup Script
 
 ```bash
-node scripts/cleanup.mjs --preview    # Preview cleanup
-node scripts/cleanup.mjs --execute    # Execute (with confirmation)
-node scripts/cleanup.mjs --days 7     # Override threshold
+npm run cleanup -- --preview          # Preview cleanup
+npm run cleanup -- --execute          # Execute (with confirmation)
+npm run cleanup -- --days 7           # Override threshold
 ```
 
 ### Log Analysis

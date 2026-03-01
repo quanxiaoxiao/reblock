@@ -10,11 +10,11 @@
  * 4. 重复 SHA256 - 多个 block 记录指向相同 SHA256
  *
  * Usage:
- *   node scripts/doctor.mjs                    # 检查所有 blocks
- *   node scripts/doctor.mjs --issues-only      # 只显示有问题的
- *   node scripts/doctor.mjs --block-id <id>    # 检查特定 block
- *   node scripts/doctor.mjs --json             # JSON 输出
- *   node scripts/doctor.mjs --limit 100        # 限制检查数量
+ *   npm run doctor                             # 检查所有 blocks
+ *   npm run doctor -- --issues-only            # 只显示有问题的
+ *   npm run doctor -- --block-id <id>          # 检查特定 block
+ *   npm run doctor -- --json                   # JSON 输出
+ *   npm run doctor -- --limit 100              # 限制检查数量
  */
 
 import mongoose from 'mongoose';
@@ -27,7 +27,7 @@ import { createHmac } from 'crypto';
 let logService;
 async function initLogService() {
   if (!logService) {
-    const { logService: service } = await import('../dist/services/logService.js');
+    const { logService: service } = await import('../src/services/logService.ts');
     logService = service;
   }
   return logService;
@@ -590,7 +590,7 @@ async function main() {
 ${colors.cyan}Reblock Doctor - 健康检查工具${colors.reset}
 
 Usage:
-  node scripts/doctor.mjs [options]
+  npm run doctor -- [options]
 
 Options:
   --issues-only     只显示有问题的 blocks
@@ -600,10 +600,10 @@ Options:
   --help, -h        显示帮助信息
 
 Examples:
-  node scripts/doctor.mjs                    # 检查所有 blocks
-  node scripts/doctor.mjs --issues-only      # 只显示有问题的
-  node scripts/doctor.mjs --block-id abc123  # 检查特定 block
-  node scripts/doctor.mjs --json > report.json
+  npm run doctor                             # 检查所有 blocks
+  npm run doctor -- --issues-only            # 只显示有问题的
+  npm run doctor -- --block-id abc123        # 检查特定 block
+  npm run doctor -- --json > report.json
 `);
     process.exit(0);
   }

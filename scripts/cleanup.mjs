@@ -24,7 +24,7 @@ import readline from 'readline';
 let logService;
 async function initLogService() {
   if (!logService) {
-    const { logService: service } = await import('../dist/services/logService.js');
+    const { logService: service } = await import('../src/services/logService.ts');
     logService = service;
   }
   return logService;
@@ -232,7 +232,7 @@ async function executeCleanup(items) {
   // Get LogCategory from logEntry model
   let LogCategory;
   try {
-    const logEntryModule = await import('../dist/models/logEntry.js');
+    const logEntryModule = await import('../src/models/logEntry.ts');
     LogCategory = logEntryModule.LogCategory;
   } catch {
     // Fallback if import fails
