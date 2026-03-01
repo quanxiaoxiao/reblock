@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import type { Context, Next } from 'hono';
 import { logService } from '../../services/logService';
 import { LogLevel, LogCategory, DataLossRisk } from '../../models/logEntry';
@@ -30,7 +31,6 @@ export async function errorHandler(c: Context, next: Next) {
     });
 
     // Log to file for debugging
-    const fs = require('fs');
     fs.appendFileSync('/tmp/server_errors.log', `${new Date().toISOString()} [${errorId}] Error: ${error.message} path: ${path}\n`);
 
     try {
