@@ -20,11 +20,16 @@ RUN npm run build
 # Production stage
 FROM node:24-alpine AS production
 
-# Install curl for healthcheck
-RUN apk add --no-cache curl
+ARG TZ=Asia/Shanghai
+ENV TZ=${TZ}
 
-ENV TZ=Asia/Shanghai
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+# Install runtime packages:
+# - curl: healthcheck
+# - tzdata: timezone database for /usr/share/zoneinfo
+RUN apk add --no-cache curl tzdata
+
+# Apply timezone from build arg/env
+RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && echo ${TZ} > /etc/timezone
 
 WORKDIR /app
 

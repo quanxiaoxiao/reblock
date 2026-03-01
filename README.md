@@ -312,8 +312,9 @@ Log categories:
 The easiest way to get started:
 
 ```bash
-# Generate encryption key
+# Generate encryption key and optional timezone
 echo "ENCRYPTION_KEY=$(openssl rand -base64 32)" > .env
+echo "TZ=Asia/Shanghai" >> .env   # optional
 
 # Start all services
 docker-compose up -d
@@ -330,14 +331,19 @@ docker-compose down
 Multi-stage build with Alpine Linux:
 
 ```bash
-docker build -t reblock .
-docker run -p 3000:3000 --env-file .env reblock
+docker build --build-arg TZ=${TZ:-Asia/Shanghai} -t reblock .
+docker run -p 3000:3000 --env-file .env -e TZ=${TZ:-Asia/Shanghai} reblock
 ```
 
 Features:
 - Non-root user
 - Health check
 - ~100MB image size
+
+Timezone configuration:
+- Default timezone is `Asia/Shanghai`.
+- Override with `.env` (`TZ=UTC`) when using Docker Compose.
+- Override with `--build-arg TZ=...` (build time) and `-e TZ=...` (runtime) when using `docker build/run`.
 
 ## Testing
 

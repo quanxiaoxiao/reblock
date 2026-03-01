@@ -24,6 +24,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        TZ: ${TZ:-Asia/Shanghai}
     container_name: reblock-app
     restart: unless-stopped
     ports:
@@ -42,6 +44,7 @@ services:
       STORAGE_LOG_DIR: /app/storage/_logs
       CLEANUP_DEFAULT_DAYS: 30
       LOG_TTL_DAYS: 90
+      TZ: ${TZ:-Asia/Shanghai}
       # ENCRYPTION_KEY must be set - generate with: openssl rand -base64 32
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     volumes:
@@ -68,8 +71,9 @@ networks:
     driver: bridge
 
 # Usage:
-# 1. Create .env file with ENCRYPTION_KEY
+# 1. Create .env file with ENCRYPTION_KEY (and optional TZ)
 #    echo "ENCRYPTION_KEY=$(openssl rand -base64 32)" > .env
+#    echo "TZ=Asia/Shanghai" >> .env
 #
 # 2. Start services:
 #    docker-compose up -d
