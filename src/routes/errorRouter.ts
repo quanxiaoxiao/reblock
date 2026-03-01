@@ -191,7 +191,7 @@ router.openapi(
       filter.status = { $ne: IssueStatus.RESOLVED };
     }
     
-    const errors = await logService.findRecent(daysNum, {
+    const logFilter = {
       ...filter,
       path: path || undefined,
       method: method || undefined,
@@ -199,12 +199,23 @@ router.openapi(
       errorId: errorId || undefined,
       requestId: requestId || undefined,
       fingerprint: fingerprint || undefined,
-      sortOrder: order === 'asc' ? 'asc' : 'desc',
-    });
-    
-    // Apply pagination
-    const total = errors.length;
-    const paginatedErrors = errors.slice(offsetNum, offsetNum + limitNum);
+      sortOrder: order === 'asc' ? 'asc' : 'desc' as const,
+      limit: limitNum,
+      offset: offsetNum,
+    };
+
+    const [total, paginatedErrors] = await Promise.all([
+      logService.countRecent(daysNum, {
+        ...filter,
+        path: path || undefined,
+        method: method || undefined,
+        errorName: errorName || undefined,
+        errorId: errorId || undefined,
+        requestId: requestId || undefined,
+        fingerprint: fingerprint || undefined,
+      }),
+      logService.findRecent(daysNum, logFilter),
+    ]);
     
     return c.json({
       total,
@@ -279,11 +290,7 @@ router.openapi(
   async (c: Context) => {
     const { id } = c.req.param();
     
-    const errors = await logService.findRecent(365, {
-      category: LogCategory.RUNTIME_ERROR,
-    });
-    
-    const error = errors.find(e => e._id.toString() === id);
+    const error = await logService.findRuntimeErrorById(id);
     
     if (!error) {
       return c.json({ error: 'Error not found' }, 404);
@@ -333,11 +340,7 @@ router.openapi(
   async (c: Context) => {
     const { id } = c.req.param();
     
-    const errors = await logService.findRecent(365, {
-      category: LogCategory.RUNTIME_ERROR,
-    });
-    
-    const error = errors.find(e => e._id.toString() === id);
+    const error = await logService.findRuntimeErrorById(id);
     
     if (!error) {
       return c.json({ error: 'Error not found' }, 404);

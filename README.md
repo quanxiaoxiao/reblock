@@ -271,6 +271,10 @@ ENCRYPTION_KEY=your_base64_key_here
 # Cleanup
 CLEANUP_DEFAULT_DAYS=30
 LOG_TTL_DAYS=90
+LOG_ARCHIVE_DAYS=30
+LOG_ARCHIVE_TZ=Asia/Shanghai
+LOG_DEDUP_WINDOW_MINUTES=10
+ERROR_FALLBACK_LOG_FILE=./storage/_logs/runtime-fallback.log
 
 # Error API protection (optional)
 # If set, all /errors endpoints require x-errors-token

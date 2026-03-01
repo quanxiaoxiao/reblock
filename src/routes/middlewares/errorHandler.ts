@@ -1,5 +1,6 @@
-import fs from 'node:fs';
+import { appendFile, mkdir } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
+import { dirname } from 'node:path';
 import type { Context, Next } from 'hono';
 import { logService } from '../../services/logService';
 import { LogLevel, LogCategory, DataLossRisk } from '../../models/logEntry';
@@ -42,11 +43,18 @@ export async function errorHandler(c: Context, next: Next) {
       fingerprint,
     });
 
-    // Log to file for debugging
-    fs.appendFileSync(
-      '/tmp/server_errors.log',
-      `${new Date().toISOString()} [${errorId}] ${method} ${path} status=${statusCode} fingerprint=${fingerprint} error=${error.message}\n`
-    );
+    // Best-effort fallback file log for emergency debugging.
+    try {
+      const fallbackFile = env.ERROR_FALLBACK_LOG_FILE || './storage/_logs/runtime-fallback.log';
+      await mkdir(dirname(fallbackFile), { recursive: true });
+      await appendFile(
+        fallbackFile,
+        `${new Date().toISOString()} [${errorId}] ${method} ${path} status=${statusCode} fingerprint=${fingerprint} error=${error.message}\n`,
+        'utf-8'
+      );
+    } catch (fileLogError) {
+      console.error(`[${errorId}] Failed to write fallback error log:`, fileLogError);
+    }
 
     if (isServerError) {
       try {

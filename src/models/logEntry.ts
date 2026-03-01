@@ -302,9 +302,14 @@ const logEntrySchema = new Schema<ILogEntry>({
 logEntrySchema.index({ category: 1, status: 1, timestamp: -1 });
 logEntrySchema.index({ blockId: 1, timestamp: -1 });
 logEntrySchema.index({ 'context.detectedBy': 1, timestamp: -1 });
+logEntrySchema.index({ 'context.requestId': 1, timestamp: -1 });
 logEntrySchema.index({ level: 1, timestamp: -1 });
 logEntrySchema.index({ status: 1, timestamp: -1 });
 logEntrySchema.index({ category: 1, fingerprint: 1, status: 1, timestamp: -1 });
+logEntrySchema.index({ category: 1, 'details.errorId': 1, timestamp: -1 });
+logEntrySchema.index({ category: 1, 'details.path': 1, 'details.method': 1, timestamp: -1 });
+logEntrySchema.index({ category: 1, 'details.errorName': 1, timestamp: -1 });
+logEntrySchema.index({ category: 1, 'details.requestId': 1, timestamp: -1 });
 
 // TTL index - automatically delete after LOG_TTL_DAYS
 logEntrySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });

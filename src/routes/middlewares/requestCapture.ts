@@ -12,15 +12,26 @@ const SENSITIVE_BODY_FIELDS = [
   'refresh_token',
 ];
 
-function sanitizeBody(obj: unknown): unknown {
-  if (!obj || typeof obj !== 'object') return obj;
+const MAX_SANITIZE_DEPTH = 8;
+const MAX_SANITIZE_ARRAY_ITEMS = 100;
+
+function sanitizeBody(obj: unknown, depth: number = 0): unknown {
+  if (!obj || depth > MAX_SANITIZE_DEPTH) return obj;
+
+  if (Array.isArray(obj)) {
+    return obj
+      .slice(0, MAX_SANITIZE_ARRAY_ITEMS)
+      .map((item) => sanitizeBody(item, depth + 1));
+  }
+
+  if (typeof obj !== 'object') return obj;
 
   const sanitized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
     const isSensitive = SENSITIVE_BODY_FIELDS.some((field) =>
       key.toLowerCase().includes(field.toLowerCase())
     );
-    sanitized[key] = isSensitive ? '[REDACTED]' : value;
+    sanitized[key] = isSensitive ? '[REDACTED]' : sanitizeBody(value, depth + 1);
   }
   return sanitized;
 }

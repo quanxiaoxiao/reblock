@@ -107,7 +107,7 @@ export interface MetricsSnapshot {
 export interface LogFilter {
   category?: LogCategory;
   level?: LogLevel;
-  status?: IssueStatus;
+  status?: IssueStatus | { $ne: IssueStatus };
   blockId?: string;
   detectedBy?: string;
   fingerprint?: string;
@@ -118,6 +118,8 @@ export interface LogFilter {
   errorName?: string;
   startDate?: Date;
   endDate?: Date;
+  limit?: number;
+  offset?: number;
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -138,6 +140,25 @@ export interface LogSummary {
 }
 
 export class LogService {
+  async findById(logId: string): Promise<ILogEntry | null> {
+    return LogEntry.findById(logId).exec();
+  }
+
+  async findRuntimeErrorById(logId: string): Promise<ILogEntry | null> {
+    if (!Types.ObjectId.isValid(logId)) {
+      return null;
+    }
+    return LogEntry.findOne({
+      _id: new Types.ObjectId(logId),
+      category: LogCategory.RUNTIME_ERROR,
+    }).exec();
+  }
+
+  async countRecent(days: number, filter?: LogFilter): Promise<number> {
+    const query = this.buildRecentQuery(days, filter);
+    return LogEntry.countDocuments(query);
+  }
+
   /**
    * Log an issue detected in the system
    * Stores in both MongoDB and file system
@@ -150,29 +171,38 @@ export class LogService {
 
     // Runtime errors can be noisy. Aggregate repeated issues with the same fingerprint in short windows.
     if (params.category === LogCategory.RUNTIME_ERROR && fingerprint) {
-      const existing = await LogEntry.findOne({
-        category: params.category,
-        fingerprint,
-        status: { $in: [IssueStatus.OPEN, IssueStatus.ACKNOWLEDGED] },
-        timestamp: { $gte: now - dedupWindowMs },
-      });
+      const existing = await LogEntry.findOneAndUpdate(
+        {
+          category: params.category,
+          fingerprint,
+          status: { $in: [IssueStatus.OPEN, IssueStatus.ACKNOWLEDGED] },
+          timestamp: { $gte: now - dedupWindowMs },
+        },
+        {
+          $set: {
+            timestamp: now,
+            lastSeenAt: now,
+            details: params.details,
+            context: {
+              detectedBy: params.context?.detectedBy || 'system',
+              detectedAt: now,
+              scriptVersion: params.context?.scriptVersion,
+              serverVersion: params.context?.serverVersion,
+              environment: params.context?.environment || this.getEnvironment(),
+              originalCreatedAt: params.context?.originalCreatedAt,
+              daysSinceCreation: params.context?.daysSinceCreation,
+              lastAccessedAt: params.context?.lastAccessedAt,
+              stackTrace: params.context?.stackTrace,
+              requestId: params.context?.requestId,
+              userAgent: params.context?.userAgent,
+            },
+          },
+          $inc: { occurrenceCount: 1 },
+        },
+        { new: true }
+      );
 
       if (existing) {
-        existing.timestamp = now;
-        existing.lastSeenAt = now;
-        existing.occurrenceCount = (existing.occurrenceCount || 1) + 1;
-        existing.details = {
-          ...existing.details,
-          latest: params.details,
-        };
-        existing.context = {
-          ...existing.context,
-          detectedAt: now,
-          requestId: params.context?.requestId || existing.context.requestId,
-          userAgent: params.context?.userAgent || existing.context.userAgent,
-        };
-
-        await existing.save();
         await this.writeToFile(existing, 'issues');
         return existing;
       }
@@ -382,10 +412,36 @@ export class LogService {
    * Find logs within date range
    */
   async findRecent(days: number, filter?: LogFilter): Promise<ILogEntry[]> {
+    const query = this.buildRecentQuery(days, filter);
+
+    const limit = typeof filter?.limit === 'number'
+      ? Math.max(1, Math.min(500, Math.floor(filter.limit)))
+      : undefined;
+    const offset = typeof filter?.offset === 'number'
+      ? Math.max(0, Math.floor(filter.offset))
+      : 0;
+
+    const dbQuery = LogEntry.find(query)
+      .sort({ timestamp: filter?.sortOrder === 'asc' ? 1 : -1 })
+      .skip(offset);
+
+    if (typeof limit === 'number') {
+      dbQuery.limit(limit);
+    }
+
+    return dbQuery.exec();
+  }
+
+  private buildRecentQuery(days: number, filter?: LogFilter): Record<string, unknown> {
     const since = Date.now() - days * 24 * 60 * 60 * 1000;
-    
-    const query: any = {
-      timestamp: { $gte: since },
+    const startTs = filter?.startDate?.getTime();
+    const endTs = filter?.endDate?.getTime();
+
+    const query: Record<string, unknown> = {
+      timestamp: {
+        $gte: typeof startTs === 'number' ? startTs : since,
+        ...(typeof endTs === 'number' ? { $lte: endTs } : {}),
+      },
     };
 
     if (filter?.category) query.category = filter.category;
@@ -405,9 +461,7 @@ export class LogService {
     if (filter?.method) query['details.method'] = filter.method;
     if (filter?.errorName) query['details.errorName'] = filter.errorName;
 
-    return LogEntry.find(query)
-      .sort({ timestamp: filter?.sortOrder === 'asc' ? 1 : -1 })
-      .exec();
+    return query;
   }
 
   /**
