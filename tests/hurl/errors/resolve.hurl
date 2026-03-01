@@ -1,11 +1,19 @@
 # Error API Tests - Resolve
 
-# Setup: Trigger a 404 error to generate error log
-GET {{BASE_URL}}/entries/invalid-alias-{{timestamp}}
-HTTP 404
+################################################################################
+# Test 1: Create a test error first
+################################################################################
+POST {{BASE_URL}}/errors/test/create
+Content-Type: application/json
+{
+  "message": "Test error for resolve test"
+}
+HTTP 201
+[Captures]
+error_uuid: jsonpath "$.errorId"
 
 ################################################################################
-# Test 1: Query open errors
+# Test 2: Query open errors
 ################################################################################
 GET {{BASE_URL}}/errors?days=7&status=open
 HTTP 200
@@ -15,7 +23,7 @@ error_id: jsonpath "$.errors[0]._id"
 jsonpath "$.total" >= 1
 
 ################################################################################
-# Test 2: Get error detail
+# Test 3: Get error detail
 ################################################################################
 GET {{BASE_URL}}/errors/{{error_id}}
 HTTP 200
@@ -23,7 +31,7 @@ HTTP 200
 jsonpath "$.status" == "open"
 
 ################################################################################
-# Test 3: Export AI format
+# Test 4: Export AI format
 ################################################################################
 GET {{BASE_URL}}/errors/{{error_id}}/export
 HTTP 200
@@ -34,7 +42,7 @@ jsonpath "$.reproduction.method" exists
 jsonpath "$.reproduction.path" exists
 
 ################################################################################
-# Test 4: Resolve the error
+# Test 5: Resolve the error
 ################################################################################
 POST {{BASE_URL}}/errors/{{error_id}}/resolve
 Content-Type: application/json
@@ -46,7 +54,7 @@ HTTP 200
 jsonpath "$.success" == true
 
 ################################################################################
-# Test 5: Verify resolved status
+# Test 6: Verify resolved status
 ################################################################################
 GET {{BASE_URL}}/errors/{{error_id}}
 HTTP 200
@@ -55,7 +63,7 @@ jsonpath "$.status" == "resolved"
 jsonpath "$.resolution" == "Fixed in hurl test"
 
 ################################################################################
-# Test 6: Query resolved errors - should include our resolved error
+# Test 7: Query resolved errors - should include our resolved error
 ################################################################################
 GET {{BASE_URL}}/errors?days=7&status=resolved
 HTTP 200

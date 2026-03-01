@@ -80,19 +80,20 @@ describe('ResourceService', () => {
 
   describe('getById', () => {
     it('should return a resource by id with sha256 populated', async () => {
+      const validObjectId = '69a3a59a7faa60991f3d2891';
       const mockBlock = {
-        _id: 'block-id-1',
+        _id: validObjectId,
         sha256: 'abc123def456',
       };
 
       const mockResource = {
-        _id: 'resource-id-1',
+        _id: validObjectId,
         block: mockBlock,
-        entry: 'entry-id-1',
+        entry: validObjectId,
         toObject: vi.fn().mockReturnValue({
-          _id: 'resource-id-1',
+          _id: validObjectId,
           block: mockBlock,
-          entry: 'entry-id-1',
+          entry: validObjectId,
         }),
       };
 
@@ -104,7 +105,7 @@ describe('ResourceService', () => {
         populate: mockPopulate,
       });
 
-      const result = await service.getById('resource-id-1');
+      const result = await service.getById(validObjectId);
 
       expect(result).toBeDefined();
       expect(result?.sha256).toBe('abc123def456');

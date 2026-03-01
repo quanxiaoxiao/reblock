@@ -29,7 +29,12 @@ export async function errorHandler(c: Context, next: Next) {
       cause: error.cause,
     });
 
+    // Log to file for debugging
+    const fs = require('fs');
+    fs.appendFileSync('/tmp/server_errors.log', `${new Date().toISOString()} [${errorId}] Error: ${error.message} path: ${path}\n`);
+
     try {
+      console.log('DEBUG: About to call logService.logIssue');
       await logService.logIssue({
         level: LogLevel.ERROR,
         category: LogCategory.RUNTIME_ERROR,

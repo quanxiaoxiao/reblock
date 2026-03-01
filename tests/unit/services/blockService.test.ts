@@ -62,19 +62,21 @@ describe('BlockService', () => {
   });
 
   describe('getById', () => {
+    const validObjectId = '69a3a59a7faa60991f3d2891';
+    
     it('should return a block by id excluding soft-deleted', async () => {
       const mockBlock = {
-        _id: 'block-id-1',
+        _id: validObjectId,
         sha256: 'abc123',
         isInvalid: false,
       };
 
       vi.mocked(Block.findOne).mockResolvedValue(mockBlock as never);
 
-      const result = await service.getById('block-id-1');
+      const result = await service.getById(validObjectId);
 
       expect(Block.findOne).toHaveBeenCalledWith({
-        _id: 'block-id-1',
+        _id: validObjectId,
         isInvalid: { $ne: true },
       });
       expect(result).toEqual(mockBlock);
@@ -83,7 +85,7 @@ describe('BlockService', () => {
     it('should return null for non-existent block', async () => {
       vi.mocked(Block.findOne).mockResolvedValue(null as never);
 
-      const result = await service.getById('non-existent-id');
+      const result = await service.getById(validObjectId);
 
       expect(result).toBeNull();
     });
@@ -91,10 +93,10 @@ describe('BlockService', () => {
     it('should not return soft-deleted blocks', async () => {
       vi.mocked(Block.findOne).mockResolvedValue(null as never);
 
-      const result = await service.getById('soft-deleted-id');
+      const result = await service.getById(validObjectId);
 
       expect(Block.findOne).toHaveBeenCalledWith({
-        _id: 'soft-deleted-id',
+        _id: validObjectId,
         isInvalid: { $ne: true },
       });
       expect(result).toBeNull();

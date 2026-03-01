@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Block } from '../models';
 import type { IBlock } from '../models';
 import type { PaginatedResult } from './types';
@@ -46,6 +47,9 @@ export class BlockService implements IBlockService {
   }
 
   async getById(id: string): Promise<IBlock | null> {
+    if (!mongoose.isValidObjectId(id)) {
+      return null;
+    }
     return Block.findOne({ _id: id, isInvalid: { $ne: true } });
   }
 

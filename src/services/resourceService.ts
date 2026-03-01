@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import mongoose from 'mongoose';
 import { Resource, Block, Entry } from '../models';
 import type { IResource, IBlock } from '../models';
 import type { PaginatedResult } from './types';
@@ -87,6 +88,10 @@ export class ResourceService implements IResourceService {
   }
 
   async getById(id: string): Promise<(IResource & { sha256?: string }) | null> {
+    if (!mongoose.isValidObjectId(id)) {
+      return null;
+    }
+    
     const resource = await Resource.findOne({ _id: id, isInvalid: { $ne: true } })
       .populate('block', 'sha256')
       .exec();

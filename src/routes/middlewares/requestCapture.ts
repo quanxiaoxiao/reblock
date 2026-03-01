@@ -68,7 +68,7 @@ export async function captureRequestBody(c: Context, next: Next) {
   // Skip body capture for routes that need raw body stream (e.g., file uploads)
   // These routes use c.req.raw.body directly
   const path = c.req.path;
-  if (path.startsWith('/upload/')) {
+  if (path.startsWith('/upload') || path.startsWith('/errors')) {
     await next();
     return;
   }

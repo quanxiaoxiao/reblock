@@ -1,7 +1,9 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
+import crypto from 'crypto';
 import { logService } from '../services/logService';
-import { IssueStatus, LogCategory } from '../models/logEntry';
+import { IssueStatus, LogCategory, LogLevel, DataLossRisk } from '../models/logEntry';
+import { env } from '../config/env';
 
 const ErrorListItemSchema = z.object({
   _id: z.string(),
@@ -436,6 +438,86 @@ router.openapi(
       }
       throw err;
     }
+  }
+);
+
+// POST /errors/test/create - Create a test error (development/test only)
+router.openapi(
+  createRoute({
+    method: 'post',
+    path: '/test/create',
+    tags: ['Errors'],
+    description: 'Create a test error entry (development/test only)',
+    request: {
+      body: {
+        content: {
+          'application/json': {
+            schema: z.object({
+              message: z.string().optional().default('Test error'),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      201: {
+        description: 'Test error created',
+        content: {
+          'application/json': {
+            schema: z.object({
+              success: z.boolean(),
+              errorId: z.string(),
+            }),
+          },
+        },
+      },
+      403: {
+        description: 'Not allowed in production',
+        content: {
+          'application/json': {
+            schema: z.object({
+              error: z.string(),
+            }),
+          },
+        },
+      },
+    },
+  }),
+  async (c: Context) => {
+    // Only allow in development or test environment
+    if (env.NODE_ENV === 'production') {
+      return c.json({ error: 'Test error creation not allowed in production' }, 403);
+    }
+
+    const { message } = await c.req.json().catch(() => ({ message: 'Test error' }));
+    const errorId = crypto.randomUUID();
+    const timestamp = Date.now();
+
+    await logService.logIssue({
+      level: LogLevel.ERROR,
+      category: LogCategory.RUNTIME_ERROR,
+      details: {
+        errorId,
+        path: '/errors/test/create',
+        method: 'POST',
+        clientIp: '127.0.0.1',
+        errorMessage: message,
+        errorName: 'TestError',
+      },
+      suggestedAction: 'This is a test error for testing purposes',
+      recoverable: true,
+      dataLossRisk: DataLossRisk.NONE,
+      context: {
+        detectedBy: 'system',
+        detectedAt: timestamp,
+        environment: env.NODE_ENV as 'development' | 'production' | 'test',
+      },
+    });
+
+    return c.json({
+      success: true,
+      errorId,
+    }, 201);
   }
 );
 
