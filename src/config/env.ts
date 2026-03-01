@@ -14,7 +14,7 @@ if (isTestRuntime) {
   runtimeEnv.PORT ??= '3000';
   runtimeEnv.MONGO_HOSTNAME ??= 'localhost';
   runtimeEnv.MONGO_DATABASE ??= 'reblock_test';
-  runtimeEnv.ENCRYPTION_KEY ??= 'test-encryption-key-32-chars-min';
+  runtimeEnv.ENCRYPTION_KEY ??= 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
 }
 
 const envSchema = z.object({

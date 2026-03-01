@@ -41,7 +41,7 @@ jobs:
       PORT: '3000'
       MONGO_HOSTNAME: localhost
       MONGO_DATABASE: reblock_test
-      ENCRYPTION_KEY: test-encryption-key-32-chars-min
+      ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 
     steps:
       - name: Checkout code
@@ -87,7 +87,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: reblock/reblock
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/reblock
           tags: |
             type=ref,event=branch
             type=sha,prefix=
