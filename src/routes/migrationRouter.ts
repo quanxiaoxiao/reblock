@@ -29,6 +29,14 @@ const ImportResourceSchema = z.object({
     description: 'Base64 encoded file content',
     example: 'PGh0bWw+...'
   }),
+  createdAt: z.number().optional().openapi({
+    description: 'Resource creation timestamp (milliseconds)',
+    example: 1772438656186
+  }),
+  updatedAt: z.number().optional().openapi({
+    description: 'Resource update timestamp (milliseconds)',
+    example: 1772438656205
+  }),
 }).openapi('ImportResourceRequest');
 
 const ImportResourceResponseSchema = z.object({

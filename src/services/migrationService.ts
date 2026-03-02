@@ -24,6 +24,8 @@ export interface MigrationResourceData {
   category?: string;
   description?: string;
   contentBase64: string;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface MigrationResult {
@@ -48,7 +50,7 @@ export class MigrationService {
   private readonly blocksDir = env.STORAGE_BLOCK_DIR;
 
   async importResource(data: MigrationResourceData): Promise<MigrationResult> {
-    const { legacyId, entryAlias, name, mime, category, description, contentBase64 } = data;
+    const { legacyId, entryAlias, name, mime, category, description, contentBase64, createdAt, updatedAt } = data;
 
     // Step 1: Validate legacyId format
     if (!Types.ObjectId.isValid(legacyId)) {
@@ -91,10 +93,10 @@ export class MigrationService {
         );
       }
 
-      // Step 7: Handle block deduplication
-      const block = await this.handleBlockDeduplication(sha256, size, tempFilePath);
+      // Step 7: Handle block deduplication with custom timestamps
+      const block = await this.handleBlockDeduplication(sha256, size, tempFilePath, createdAt, updatedAt);
 
-      // Step 8: Create resource with custom _id
+      // Step 8: Create resource with custom _id and timestamps
       const resource = await this.createResourceWithLegacyId({
         legacyId,
         entry,
@@ -102,7 +104,9 @@ export class MigrationService {
         name,
         mime,
         category,
-        description
+        description,
+        createdAt,
+        updatedAt
       });
 
       // Step 9: Log success
@@ -229,9 +233,13 @@ export class MigrationService {
   private async handleBlockDeduplication(
     sha256: string,
     size: number,
-    tempFilePath: string
+    tempFilePath: string,
+    createdAt?: number,
+    updatedAt?: number
   ): Promise<IBlock> {
     const now = Date.now();
+    const blockCreatedAt = createdAt || now;
+    const blockUpdatedAt = updatedAt || now;
     const storageName = generateStorageName(sha256);
     const blockPath = this.getStoragePath(storageName);
 
@@ -249,8 +257,8 @@ export class MigrationService {
           size,
           linkCount: 1,
           isInvalid: false,
-          createdAt: now,
-          updatedAt: now,
+          createdAt: blockCreatedAt,
+          updatedAt: blockUpdatedAt,
         });
 
         // Write file for new block
@@ -341,9 +349,13 @@ export class MigrationService {
     mime?: string;
     category?: string;
     description?: string;
+    createdAt?: number;
+    updatedAt?: number;
   }): Promise<IResource> {
-    const { legacyId, entry, block, name, mime, category, description } = params;
+    const { legacyId, entry, block, name, mime, category, description, createdAt, updatedAt } = params;
     const now = Date.now();
+    const resourceCreatedAt = createdAt || now;
+    const resourceUpdatedAt = updatedAt || now;
 
     const resource = new Resource({
       _id: new Types.ObjectId(legacyId),
@@ -353,9 +365,9 @@ export class MigrationService {
       description: description || '',
       mime: mime || undefined,
       category: category || undefined,
-      createdAt: now,
-      updatedAt: now,
-      lastAccessedAt: now,
+      createdAt: resourceCreatedAt,
+      updatedAt: resourceUpdatedAt,
+      lastAccessedAt: resourceCreatedAt,
     });
 
     try {
