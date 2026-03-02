@@ -43,6 +43,18 @@ export default [
       'no-console': 'off',
       // FIXME: Scripts currently use dynamic imports, remove this override after refactoring to TypeScript
       'no-restricted-syntax': 'off',
+      // Scripts must import from src/, not dist/
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/dist/**', '../dist/**', './dist/**'],
+              message: 'Scripts must import from src/ directory. Use: await import("../src/...")',
+            },
+          ],
+        },
+      ],
     },
   },
   {
