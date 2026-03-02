@@ -12,6 +12,7 @@ import uploadRouter from './routes/uploadRouter';
 import errorRouter from './routes/errorRouter';
 import migrationRouter from './routes/migrationRouter';
 import metricsRouter from './routes/metricsRouter';
+import legacyRouter from './routes/legacyRouter';
 import { errorHandler } from './routes/middlewares/errorHandler';
 import { captureRequestBody } from './routes/middlewares/requestCapture';
 
@@ -156,6 +157,8 @@ app.openapi(
 );
 
 // API Routes
+// Legacy compatibility routes (must be before standard routes)
+app.route('/', legacyRouter);
 app.route('/blocks', blockRouter);
 app.route('/entries', entryRouter);
 app.route('/resources', resourceRouter);
