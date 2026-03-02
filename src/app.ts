@@ -61,41 +61,30 @@ mongoose
     process.exit(1);
   });
 
-// OpenAPI document - only available in development/test
-app.doc('/openapi.json', (c) => {
-  // Only allow OpenAPI spec in development or test mode
-  if (env.NODE_ENV !== 'development' && env.NODE_ENV !== 'test') {
-    return c.json({ error: 'OpenAPI specification only available in development mode' }, 404);
-  }
-  
-  const serverUrl = new URL(c.req.url);
-  serverUrl.pathname = '';
-  
-  return {
-    openapi: '3.0.0',
-    info: {
-      version: '1.0.0',
-      title: 'Resource Block API',
-      description: 'API for managing blocks, entries, and resources',
-    },
-    servers: [
-      {
-        url: serverUrl.toString(),
-        description: 'Current Server',
+// OpenAPI document and API docs - only available in development/test
+if (env.NODE_ENV !== 'production') {
+  app.doc('/openapi.json', (c) => {
+    const serverUrl = new URL(c.req.url);
+    serverUrl.pathname = '';
+    
+    return {
+      openapi: '3.0.0',
+      info: {
+        version: '1.0.0',
+        title: 'Resource Block API',
+        description: 'API for managing blocks, entries, and resources',
       },
-    ],
-  };
-});
+      servers: [
+        {
+          url: serverUrl.toString(),
+          description: 'Current Server',
+        },
+      ],
+    };
+  });
 
-// API Documentation - only available in development/test
-app.get('/docs', async (c: Context) => {
-  // Only allow API docs in development or test mode
-  if (env.NODE_ENV !== 'development' && env.NODE_ENV !== 'test') {
-    return c.json({ 
-      message: 'API documentation is only available in development mode',
-      hint: 'Set NODE_ENV=development to enable documentation'
-    }, 404);
-  }
+  // API Documentation - only available in development/test
+  app.get('/docs', async (c: Context) => {
   
   // 获取基本的 OpenAPI 规范
   const openApiDocResponse = await app.fetch(
@@ -134,7 +123,8 @@ app.get('/docs', async (c: Context) => {
   </body>
 </html>
   `);
-});
+  });
+}
 
 // Health check endpoint
 app.openapi(
