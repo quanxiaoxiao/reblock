@@ -19,6 +19,17 @@ export default [
         'error',
         { argsIgnorePattern: '^_' },
       ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.name='require']",
+          message: 'Use ES module import syntax instead of require()',
+        },
+        {
+          selector: "ImportExpression",
+          message: 'Use static import statements at the top of the file instead of dynamic import()',
+        },
+      ],
     },
   },
   // Disable TypeScript rules for plain JS files
@@ -30,6 +41,8 @@ export default [
       '@typescript-eslint/no-explicit-any': 'off',
       'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       'no-console': 'off',
+      // FIXME: Scripts currently use dynamic imports, remove this override after refactoring to TypeScript
+      'no-restricted-syntax': 'off',
     },
   },
   {
