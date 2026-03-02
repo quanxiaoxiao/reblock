@@ -356,8 +356,21 @@ docker-compose down
 Multi-stage build with Alpine Linux:
 
 ```bash
+# Standard build
 docker build --build-arg TZ=${TZ:-Asia/Shanghai} -t reblock .
 docker run -p 3000:3000 --env-file .env -e TZ=${TZ:-Asia/Shanghai} reblock
+```
+
+**Build Arguments:**
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `TZ` | `Asia/Shanghai` | Container timezone |
+| `USE_CN_MIRROR` | `false` | Use China npm mirror (npmmirror.com) for faster builds in China |
+
+```bash
+# Build for China network (faster npm install)
+docker build --build-arg USE_CN_MIRROR=true -t reblock .
 ```
 
 Features:

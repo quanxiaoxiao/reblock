@@ -3,7 +3,9 @@ FROM node:24-alpine AS builder
 
 WORKDIR /app
 
-RUN npm config set registry https://registry.npmmirror.com/
+# Build argument to optionally use China npm mirror
+ARG USE_CN_MIRROR=false
+RUN if [ "$USE_CN_MIRROR" = "true" ]; then npm config set registry https://registry.npmmirror.com/; fi
 
 # Copy package files
 COPY package*.json ./
