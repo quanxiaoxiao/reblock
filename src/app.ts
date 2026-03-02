@@ -17,8 +17,11 @@ import { captureRequestBody } from './routes/middlewares/requestCapture';
 
 const app = new OpenAPIHono();
 
-app.use('*', logger());
-app.use('*', captureRequestBody);
+// Only enable request logging in development and test environments
+if (env.NODE_ENV !== 'production') {
+  app.use('*', logger());
+  app.use('*', captureRequestBody);
+}
 app.use('*', errorHandler);
 
 const {

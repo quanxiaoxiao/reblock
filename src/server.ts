@@ -98,7 +98,9 @@ serve({
   port,
 }, (info) => {
   console.log(`🚀 Server running on http://localhost:${info.port}`);
-  console.log(`📄 API Reference: http://localhost:${info.port}/docs`);
-  console.log(`📊 OpenAPI JSON: http://localhost:${info.port}/openapi.json`);
+  if (env.NODE_ENV !== 'production') {
+    console.log(`📄 API Reference: http://localhost:${info.port}/docs`);
+    console.log(`📊 OpenAPI JSON: http://localhost:${info.port}/openapi.json`);
+  }
   console.log(`🔗 Health Check: http://localhost:${info.port}/health`);
 });
