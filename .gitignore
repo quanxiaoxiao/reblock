@@ -11,3 +11,8 @@ coverage/
 storage/
 _temp/
 imgs/
+
+# Deployment files
+deploy.mjs
+deploy.config.mjs
+reblock-deploy-*.tar.gz
