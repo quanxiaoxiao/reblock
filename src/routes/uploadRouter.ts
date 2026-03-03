@@ -140,15 +140,16 @@ router.openapi(
       
       const fileHandle = await fs.open(tempFilePath, 'w');
       
+      const readerStream = reader.getReader();
+      
       try {
-        const readerStream = reader.getReader();
-        
         while (true) {
           const { done, value } = await readerStream.read();
           if (done) break;
           await fileHandle.write(value);
         }
       } finally {
+        readerStream.releaseLock();
         await fileHandle.close();
       }
       

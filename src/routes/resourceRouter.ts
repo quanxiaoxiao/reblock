@@ -596,6 +596,10 @@ router.openapi(
             metricsSnapshotService.recordDownloadSuccess(result.size);
           })
           .catch(async (err) => {
+            // Ensure passThrough is destroyed to free up resources
+            if (!passThrough.destroyed) {
+              passThrough.destroy(err);
+            }
             metricsSnapshotService.recordDownloadInterrupted();
             await logService.logIssue({
               level: LogLevel.ERROR,
@@ -645,6 +649,10 @@ router.openapi(
           metricsSnapshotService.recordDownloadSuccess(result.totalSize);
         })
         .catch(async (err) => {
+          // Ensure passThrough is destroyed to free up resources
+          if (!passThrough.destroyed) {
+            passThrough.destroy(err);
+          }
           metricsSnapshotService.recordDownloadInterrupted();
           await logService.logIssue({
             level: LogLevel.ERROR,

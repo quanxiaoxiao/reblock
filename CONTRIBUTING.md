@@ -42,6 +42,25 @@ By participating in this project, you agree to maintain a respectful and inclusi
    npm run dev
    ```
 
+### Adding Dependencies
+
+**Important**: Before adding any new npm dependency, you **must** verify it complies with our [Dependency Guidelines](.opencode/rules/dependency-guidelines.rule.md):
+
+- **Node.js 22+** is required
+- All dependencies must be **pure JavaScript** (no C++ native extensions, WASM, or bindings)
+- Module resolution priority: packages with `nodejs` condition in `exports`/`imports`
+
+**Verification checklist:**
+```bash
+# Check package for native code red flags
+npm view <package-name> --json | grep -E "(gypfile|prebuild|bindings)"
+
+# After installation, verify no native files
+find node_modules/<package-name> -name "*.node" -o -name "*.wasm" -o -name "binding.gyp" 2>/dev/null
+```
+
+If a package contains native code, find a pure JavaScript alternative or implement the functionality internally.
+
 ### Running Tests
 
 ```bash
@@ -118,6 +137,13 @@ feat(block): add block deduplication verification
    npm run typecheck
    npm run test
    ```
+
+4. **Verify no native dependencies** (if you added/updated packages):
+   ```bash
+   # Check for prohibited native files
+   find node_modules -name "*.node" -o -name "*.wasm" -o -name "binding.gyp" 2>/dev/null
+   ```
+   If any files are found, remove the offending package and use a pure JS alternative.
 
 4. **Push to your fork**:
    ```bash

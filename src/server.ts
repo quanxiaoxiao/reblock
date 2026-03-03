@@ -93,7 +93,40 @@ if (env.NODE_ENV !== 'test') {
   console.log(`📅 Log archive scheduler initialized (daily at 03:00 ${env.LOG_ARCHIVE_TZ})`);
 }
 
-serve({
+// Store server instance for graceful shutdown
+let server: ReturnType<typeof serve>;
+
+// Graceful shutdown handler
+async function gracefulShutdown(signal: string): Promise<void> {
+  console.log(`\n${signal} received, starting graceful shutdown...`);
+
+  // Stop metrics scheduler
+  metricsSnapshotService.stopScheduler();
+  console.log('✅ Metrics scheduler stopped');
+
+  // Close HTTP server (stop accepting new connections)
+  if (server) {
+    server.close();
+    console.log('✅ HTTP server closed');
+  }
+
+  // Disconnect from MongoDB
+  try {
+    await mongoose.disconnect();
+    console.log('✅ MongoDB disconnected');
+  } catch (err) {
+    console.error('❌ Error disconnecting from MongoDB:', err);
+  }
+
+  console.log('👋 Graceful shutdown complete');
+  process.exit(0);
+}
+
+// Register shutdown handlers
+process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
+
+server = serve({
   fetch: app.fetch,
   port,
 }, (info) => {

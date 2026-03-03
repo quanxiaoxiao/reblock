@@ -27,15 +27,20 @@ A high-performance resource storage service built with Hono + TypeScript, featur
 - [MongoDB](https://www.mongodb.com/) + [Mongoose](https://mongoosejs.com/) - Database
 - [Zod](https://zod.dev/) - Schema validation and OpenAPI docs
 - AES-256-CTR - File encryption
-- Node.js 24 - Runtime
+- Node.js 22+ - Runtime
 
 ## Quick Start
 
 ### Prerequisites
 
-- Node.js 24+
+- **Node.js 22+** (required, LTS recommended)
 - MongoDB 4.4+
 - Base64-encoded 32-byte encryption key
+
+**Dependency Guidelines:**
+- Module resolution priority: `package.json` exports/imports `nodejs` field
+- Fallback: Pure JavaScript packages only
+- **Strictly prohibited:** C++ native extensions, WASM, bindings, or any non-JS code
 
 ### Option 1: Docker Compose (Recommended)
 
@@ -280,6 +285,51 @@ ERROR_FALLBACK_LOG_FILE=./storage/_logs/runtime-fallback.log
 # If set, all /errors endpoints require x-errors-token
 ERRORS_API_TOKEN=your-errors-token
 ```
+
+## Dependency Guidelines
+
+To ensure cross-platform compatibility and easy deployment:
+
+### Module Resolution Priority
+
+1. **First choice**: packages with `exports`/`imports` using `nodejs` condition in package.json  
+   Example: `"exports": { "nodejs": "./dist/node.mjs", "default": "./dist/index.mjs" }`
+
+2. **Fallback**: Pure JavaScript packages only
+
+3. **Strictly prohibited**: C++ native extensions, WASM, bindings, or any non-JS code
+
+### Pure JavaScript Requirement
+
+All dependencies must be 100% JavaScript:
+- ✅ No native C++ extensions (`.node` files)
+- ✅ No WASM modules
+- ✅ No `binding.gyp` or `prebuild` dependencies
+- ✅ No platform-specific binaries
+
+### Verification
+
+Before adding a dependency, verify it has no native code:
+
+```bash
+# Check for native dependencies in package.json
+npm pack <package-name> --dry-run 2>&1 | head -20
+
+# Look for red flags
+npm view <package-name> --json | grep -E "(gypfile|prebuild|bindings)"
+
+# Check installed package for native files
+find node_modules/<package-name> -name "*.node" -o -name "*.wasm" -o -name "binding.gyp" 2>/dev/null
+```
+
+### Alternatives for Common Native Packages
+
+| Native Package | Pure JS Alternative |
+|---------------|---------------------|
+| bcrypt | bcryptjs |
+| sharp | jimp |
+| sqlite3 | Use mongoose instead |
+| canvas | (avoid or use SVG) |
 
 ## Data Model
 

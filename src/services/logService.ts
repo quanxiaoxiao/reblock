@@ -54,6 +54,23 @@ function getArchiveDir(): string {
 // Archive threshold configuration
 const LOG_ARCHIVE_MS = env.LOG_ARCHIVE_DAYS * 24 * 60 * 60 * 1000;
 
+// Limit statusHistory to prevent unbounded growth
+const MAX_STATUS_HISTORY = 100;
+
+/**
+ * Push to status history with size limit
+ */
+function pushToStatusHistory(
+  history: { status: string; changedAt: number; changedBy?: string; note?: string }[],
+  entry: { status: string; changedAt: number; changedBy?: string; note?: string }
+): void {
+  history.push(entry);
+  // Keep only the last MAX_STATUS_HISTORY entries
+  if (history.length > MAX_STATUS_HISTORY) {
+    history.splice(0, history.length - MAX_STATUS_HISTORY);
+  }
+}
+
 // Interface for log issue parameters
 export interface LogIssueParams {
   level: LogLevel;
@@ -486,7 +503,7 @@ export class LogService {
     };
 
     entry.statusHistory = entry.statusHistory || [];
-    entry.statusHistory.push(historyEntry);
+    pushToStatusHistory(entry.statusHistory, historyEntry);
 
     // Update status
     entry.status = IssueStatus.RESOLVED;
@@ -513,7 +530,7 @@ export class LogService {
     };
 
     entry.statusHistory = entry.statusHistory || [];
-    entry.statusHistory.push(historyEntry);
+    pushToStatusHistory(entry.statusHistory, historyEntry);
     entry.status = IssueStatus.ACKNOWLEDGED;
 
     await entry.save();
@@ -676,7 +693,7 @@ export class LogService {
       for (const issue of openIssues) {
         // Add to status history
         issue.statusHistory = issue.statusHistory || [];
-        issue.statusHistory.push({
+        pushToStatusHistory(issue.statusHistory, {
           status: issue.status,
           changedAt: now,
           changedBy: resolvedBy,

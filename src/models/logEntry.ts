@@ -1,4 +1,4 @@
-import mongoose, { Document, Schema, Types } from 'mongoose';
+import mongoose, { Document, Schema, Types, type CallbackError } from 'mongoose';
 import { env } from '../config/env';
 
 /**
@@ -319,3 +319,6 @@ logEntrySchema.index({ entryIds: 1, timestamp: -1 });
 
 // Export model
 export const LogEntry = mongoose.model<ILogEntry>('LogEntry', logEntrySchema);
+
+// Limit statusHistory to prevent unbounded growth (keep last 100 entries)
+export const MAX_STATUS_HISTORY = 100;
