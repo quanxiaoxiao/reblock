@@ -26,7 +26,7 @@
 import { readFileSync, statSync, existsSync } from 'fs';
 import { resolve, join } from 'path';
 import mongoose from 'mongoose';
-import { createHmac } from 'crypto';
+import { createHmac, createDecipheriv } from 'crypto';
 
 // Load environment variables
 function loadEnv() {
@@ -225,6 +225,14 @@ function getStoragePath(sha256) {
   return join(CONFIG.BLOCKS_DIR, relativePath);
 }
 
+// Generate IV from MongoDB ObjectId (12 bytes + 4 zero bytes padding = 16 bytes for AES)
+function generateIV(objectId) {
+  const objectIdBuffer = Buffer.isBuffer(objectId)
+    ? objectId
+    : Buffer.from(objectId.toString(), 'hex');
+  return Buffer.concat([objectIdBuffer, Buffer.from([0, 0, 0, 0])]);
+}
+
 // Format bytes
 function formatBytes(bytes) {
   if (bytes === 0) return '0 B';
@@ -246,18 +254,29 @@ function formatDuration(ms) {
   return `${(ms / 60000).toFixed(2)}m`;
 }
 
-// Compute SHA256 of file
-async function computeSHA256(filePath) {
+// Compute SHA256 of file (decrypts first, then hashes)
+async function computeSHA256(filePath, iv) {
   const crypto = await import('crypto');
   const fs = await import('fs');
-  
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('sha256');
-    const stream = fs.createReadStream(filePath);
-    
-    stream.on('error', reject);
-    stream.on('data', chunk => hash.update(chunk));
-    stream.on('end', () => resolve(hash.digest('hex')));
+  const { pipeline } = await import('stream/promises');
+
+  return new Promise(async (resolve, reject) => {
+    try {
+      const hash = crypto.createHash('sha256');
+      const key = Buffer.from(CONFIG.ENCRYPTION_KEY, 'base64');
+
+      // Create decrypt stream (AES-256-CTR)
+      const decryptStream = createDecipheriv('aes-256-ctr', key, iv);
+
+      // Create file read stream
+      const fileStream = fs.createReadStream(filePath);
+
+      // Pipeline: file → decrypt → hash
+      await pipeline(fileStream, decryptStream, hash);
+      resolve(hash.digest('hex'));
+    } catch (error) {
+      reject(error);
+    }
   });
 }
 
@@ -328,7 +347,8 @@ async function analyzeResource(resourceId, models, options) {
         
         // Check SHA256 (expensive, only do if file is small)
         if (stats.size < 10 * 1024 * 1024) { // Only for files < 10MB
-          const actualSha256 = await computeSHA256(storagePath);
+          const iv = generateIV(block._id);
+          const actualSha256 = await computeSHA256(storagePath, iv);
           health.actualSha256 = actualSha256;
           health.sha256Match = actualSha256 === block.sha256;
         } else {
