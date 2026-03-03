@@ -216,7 +216,7 @@ export class LogService {
           },
           $inc: { occurrenceCount: 1 },
         },
-        { new: true }
+        { returnDocument: 'after' }
       );
 
       if (existing) {

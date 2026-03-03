@@ -222,7 +222,7 @@ export class UploadService implements IUploadService {
           const updated = await Block.findOneAndUpdate(
             { sha256, isInvalid: { $ne: true } },
             { $inc: { linkCount: 1 }, $set: { updatedAt: now } },
-            { new: true }
+            { returnDocument: 'after' }
           );
 
           if (updated) {
