@@ -48,6 +48,7 @@
     "resource:corrupt": "node scripts/resource-mgmt/resource-corrupt.mjs",
     "resource:report": "node scripts/resource-mgmt/resource-report.mjs",
     "resource:test": "node scripts/testing/resource-test-suite.mjs",
+    "deploy": "node scripts/maintenance/deploy.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

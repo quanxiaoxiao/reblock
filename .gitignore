@@ -13,7 +13,6 @@ _temp/
 imgs/
 
 # Deployment files
-deploy.mjs
 deploy.config.mjs
 deploy.back.mjs
 reblock-deploy-*.tar.gz
