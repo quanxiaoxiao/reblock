@@ -10,6 +10,21 @@ import { createDecryptStream, createDecryptStreamWithOffset } from '../utils/cry
 import { env } from '../config/env';
 import { LogLevel, LogCategory, DataLossRisk } from '../models/logEntry';
 
+/**
+ * Encode filename for Content-Disposition header (RFC 5987)
+ * Handles non-ASCII characters like Chinese in filenames
+ */
+function encodeContentDisposition(filename: string): string {
+  // Check if filename contains non-ASCII characters
+  if (/[^\x00-\x7F]/.test(filename)) {
+    // Use RFC 5987 encoding: filename*=UTF-8''url-encoded-filename
+    const encoded = encodeURIComponent(filename);
+    return `filename*=UTF-8''${encoded}`;
+  }
+  // ASCII filename - use traditional format
+  return `filename="${filename}"`;
+}
+
 const ResourceSchema = z.object({
   _id: z.string(),
   block: z.string(),
@@ -574,7 +589,7 @@ export async function handleResourceDownload(
 
       return c.body(webStream, 206, {
         'Content-Type': result.mime,
-        'Content-Disposition': `${disposition}; filename="${result.filename}"`,
+        'Content-Disposition': `${disposition}; ${encodeContentDisposition(result.filename)}`,
         'Content-Length': result.size.toString(),
         'Content-Range': `bytes ${result.range!.start}-${result.range!.end}/${result.totalSize}`,
         'Accept-Ranges': 'bytes',
@@ -627,7 +642,7 @@ export async function handleResourceDownload(
 
     return c.body(webStream, 200, {
       'Content-Type': result.mime,
-      'Content-Disposition': `${disposition}; filename="${result.filename}"`,
+      'Content-Disposition': `${disposition}; ${encodeContentDisposition(result.filename)}`,
       'Content-Length': result.totalSize.toString(),
       'Accept-Ranges': 'bytes',
     });
