@@ -30,20 +30,8 @@ Every business rule has specific trigger conditions that define when it should b
 4. If alias unchanged from current value, skip check
 
 **Validation Logic:**
-```typescript
-async function checkAliasUniqueness(alias: string, excludeId?: string): Promise<boolean> {
-  const trimmed = alias.trim();
-  if (trimmed === '') return true;
-  
-  const existing = await Entry.findOne({
-    alias: trimmed,
-    isInvalid: { $ne: true },
-    ...(excludeId ? { _id: { $ne: excludeId } } : {})
-  });
-  
-  return !existing;
-}
-```
+
+Query for existing entry with the same alias (excluding soft-deleted entries and optionally excluding the current entry being updated). Return true if no duplicate found.
 
 **Error Response:**
 ```
