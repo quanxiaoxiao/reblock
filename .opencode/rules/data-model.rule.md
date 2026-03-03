@@ -17,18 +17,17 @@ All entities follow these rules:
 
 ## Block Model
 
-### Interface
+### JSON Example
 
-```typescript
-interface IBlock {
-  _id: Types.ObjectId;
-  sha256: string;
-  linkCount: number;
-  size: number;
-  createdAt: number;
-  updatedAt: number;
-  isInvalid: boolean;
-  invalidatedAt?: number;
+```json
+{
+  "_id": "60d21b4667d0d8992e610c85",
+  "sha256": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0",
+  "linkCount": 3,
+  "size": 1024000,
+  "createdAt": 1772241136645,
+  "updatedAt": 1772242000000,
+  "isInvalid": false
 }
 ```
 
