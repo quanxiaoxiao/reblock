@@ -156,9 +156,9 @@ This is useful for:
 
 ## See Also
 
-- [Main README](../../README.md)
-- [Doctor Script](../doctor.mjs) - Health diagnostics
-- [Log Analysis](../logs-analyze.mjs) - Log inspection
+- [Main README](../README.md)
+- [Doctor Script](maintenance/doctor.mjs) - Health diagnostics
+- [Log Analysis](maintenance/logs-analyze.mjs) - Log inspection
 
 ## Runtime Error Workflow
 
