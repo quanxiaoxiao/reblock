@@ -1,31 +1,33 @@
-# 日志系统实现更新 - P0 完成
+# Logging System Implementation Update - P0 Complete
 
-> 更新日期: 2026-03-01
-> 状态: ✅ P0 任务全部完成
+> Updated: 2026-03-01
+> Status: ✅ All P0 tasks complete
 
-## 实现功能汇总
+---
 
-### ✅ Task 1.1: 归档自动化 (Archive Automation)
+## Implementation Summary
 
-**实现状态**: 已完成
+### ✅ Task 1.1: Archive Automation
 
-**功能详情**:
-- `LogService.archiveOldFiles()` 已实现真实归档逻辑
-- 扫描 `storage/_logs/issues/` 和 `storage/_logs/actions/` 目录
-- 30 天前的日志文件自动归档到 `storage/_logs/archive/YYYY/MM/` 目录
-- 归档操作记录到 MongoDB + JSONL 文件
-- 失败错误可追溯
+**Implementation Status**: Complete
 
-**定时任务配置**:
+**Features**:
+- `LogService.archiveOldFiles()` implemented with real archiving logic
+- Scans `storage/_logs/issues/` and `storage/_logs/actions/` directories
+- Automatically archives log files older than 30 days to `storage/_logs/archive/YYYY/MM/`
+- Archive operations logged to MongoDB + JSONL files
+- Traceable error handling for failures
+
+**Scheduled Task Configuration**:
 ```typescript
-// src/server.ts - 每日 03:00 (Asia/Shanghai) 自动执行
+// src/server.ts - Auto-run daily at 03:00 (Asia/Shanghai)
 schedule('0 3 * * *', async () => {
   const result = await logService.archiveOldFiles();
   console.log(`Archived ${result.archived} files`);
 });
 ```
 
-**归档日志格式**:
+**Archive Log Format**:
 ```json
 {
   "level": "INFO",
@@ -41,18 +43,18 @@ schedule('0 3 * * *', async () => {
 
 ---
 
-### ✅ Task 1.2: 清理后自动关单 (Auto-Close Issues)
+### ✅ Task 1.2: Auto-Close Issues After Cleanup
 
-**实现状态**: 已完成
+**Implementation Status**: Complete
 
-**功能详情**:
-- Cleanup 脚本成功执行后自动关闭关联 issues
-- 软删除 Block → 关闭 `ORPHANED_BLOCK` 类 issues
-- 修复 LinkCount → 关闭 `LINKCOUNT_MISMATCH` 类 issues
-- Resolution 格式标准化: `"Resolved by cleanup script: <action>"`
-- Status History 完整记录（变更人/时间/备注）
+**Features**:
+- Automatically closes related issues after successful cleanup script execution
+- Soft delete Block → closes `ORPHANED_BLOCK` issues
+- Fix LinkCount → closes `LINKCOUNT_MISMATCH` issues
+- Standardized resolution format: `"Resolved by cleanup script: <action>"`
+- Complete Status History (who/when/note)
 
-**API 新增**:
+**API Addition**:
 ```typescript
 // LogService.resolveIssuesByBlockId()
 async resolveIssuesByBlockId(
@@ -63,35 +65,35 @@ async resolveIssuesByBlockId(
 ): Promise<{ resolved: number; errors: string[] }>
 ```
 
-**执行日志示例**:
+**Execution Log Example**:
 ```
-清理完成！
-   处理: 10 个 blocks
-   孤立 blocks: 5 成功, 0 失败
-   LinkCount 修正: 3 成功, 0 失败
-   自动关闭 issues: 8 个
+Cleanup complete!
+   Processed: 10 blocks
+   Orphaned blocks: 5 succeeded, 0 failed
+   LinkCount fixes: 3 succeeded, 0 failed
+   Auto-closed issues: 8
 ```
 
 ---
 
-### ✅ Task 1.3: UploadService 异常分类
+### ✅ Task 1.3: UploadService Exception Classification
 
-**实现状态**: 已完成
+**Implementation Status**: Complete
 
-**功能详情**:
-- UploadService 已集成 LogService
-- 4 个关键异常点记录日志
+**Features**:
+- UploadService now integrates with LogService
+- 4 key exception points logged
 
-**异常分类映射**:
+**Exception Category Mapping**:
 
-| 异常场景 | Category | Level | DataLossRisk |
-|----------|----------|-------|--------------|
-| Block 去重失败（重试3次后） | `DATA_INCONSISTENCY` | ERROR | LOW |
-| 文件加密/移动失败 | `RUNTIME_ERROR` | ERROR | LOW |
-| 临时文件清理失败 | `RUNTIME_ERROR` | WARNING | NONE |
-| 数据库保存失败 | `RUNTIME_ERROR` | ERROR | MEDIUM |
+| Exception Scenario | Category | Level | DataLossRisk |
+|--------------------|----------|-------|--------------|
+| Block deduplication failed (after 3 retries) | `DATA_INCONSISTENCY` | ERROR | LOW |
+| File encryption/move failed | `RUNTIME_ERROR` | ERROR | LOW |
+| Temp file cleanup failed | `RUNTIME_ERROR` | WARNING | NONE |
+| Database save failed | `RUNTIME_ERROR` | ERROR | MEDIUM |
 
-**Context 字段**:
+**Context Fields**:
 ```typescript
 context: {
   detectedBy: 'uploadService',
@@ -104,19 +106,19 @@ context: {
 
 ---
 
-## 配置更新
+## Configuration Updates
 
-### 环境变量
+### Environment Variables
 
 ```bash
-# 已存在的环境变量
-LOG_ARCHIVE_DAYS=30          # 归档阈值（天）
-LOG_TTL_DAYS=90              # MongoDB TTL（天）
+# Existing environment variables
+LOG_ARCHIVE_DAYS=30          # Archive threshold (days)
+LOG_TTL_DAYS=90              # MongoDB TTL (days)
 
-# 无需新增，使用现有配置
+# No new variables needed, use existing config
 ```
 
-### 依赖更新
+### Dependency Updates
 
 ```bash
 npm install node-cron @types/node-cron --save
@@ -124,47 +126,47 @@ npm install node-cron @types/node-cron --save
 
 ---
 
-## 运维命令（已标准化）
+## Operations Commands (Standardized)
 
 ```bash
-# 每日定时执行
-npm run doctor              # 健康检查
-npm run logs:analyze        # 异常分析
+# Daily scheduled tasks
+npm run doctor              # Health check
+npm run logs:analyze        # Issue analysis
 
-# 每周执行（记得先备份）
-npm run cleanup -- --preview  # 清理预览
+# Weekly tasks (remember to backup first)
+npm run cleanup -- --preview  # Cleanup preview
 ```
 
 ---
 
-## 文件变更清单
+## File Change List
 
-| 文件 | 变更类型 | 说明 |
-|------|----------|------|
-| `src/services/logService.ts` | 修改 | 实现 archiveOldFiles, 新增 resolveIssuesByBlockId |
-| `scripts/cleanup.mjs` | 修改 | 添加自动关单逻辑 |
-| `src/services/uploadService.ts` | 修改 | 集成 LogService，4 个异常点记录 |
-| `src/server.ts` | 修改 | 添加 node-cron 定时任务 |
-| `package.json` | 修改 | 添加 node-cron 依赖 |
-
----
-
-## 测试状态
-
-- ✅ 157 个单元测试通过
-- ✅ 构建成功
-- ✅ TypeScript 类型检查通过
+| File | Change Type | Description |
+|------|-------------|-------------|
+| `src/services/logService.ts` | Modified | Implemented archiveOldFiles, added resolveIssuesByBlockId |
+| `scripts/cleanup.mjs` | Modified | Added auto-close issue logic |
+| `src/services/uploadService.ts` | Modified | Integrated LogService, 4 exception points logged |
+| `src/server.ts` | Modified | Added node-cron scheduled task |
+| `package.json` | Modified | Added node-cron dependency |
 
 ---
 
-## 后续规划
+## Test Status
 
-### P1 已完成
-- [x] 归档自动化
-- [x] 自动关单
-- [x] UploadService 异常分类
+- ✅ 157 unit tests passing
+- ✅ Build successful
+- ✅ TypeScript type checking passing
 
-### P2 待完成
-- [ ] Log restore scripts（日志恢复脚本）
+---
+
+## Future Plans
+
+### P1 Completed
+- [x] Archive automation
+- [x] Auto-close issues
+- [x] UploadService exception classification
+
+### P2 Pending
+- [ ] Log restore scripts
 - [ ] Webhook notifications for CRITICAL issues
 - [ ] Dashboard for visual log analysis

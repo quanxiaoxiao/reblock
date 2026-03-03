@@ -1,17 +1,21 @@
 # Import Syntax Rule
 
-所有代码必须使用 ES Module 静态导入语法，禁止使用 CommonJS 和动态导入。
+All code must use ES Module static import syntax. CommonJS and dynamic imports are forbidden.
 
-## 规则
+---
 
-1. **禁止使用 `require()`** - 这是 CommonJS 语法，本项目使用 ES Module
-2. **禁止使用 `await import()`** - 动态导入只在特殊场景允许，代码中应使用静态导入
-3. **所有导入必须放在文件顶部** - 使用标准的 ES Module import 语法
+## Rules
 
-## 正确示例
+1. **No `require()`** - This is CommonJS syntax, this project uses ES Modules
+2. **No `await import()`** - Dynamic imports are allowed only in special scenarios, code should use static imports
+3. **All imports at top of file** - Use standard ES Module import syntax
+
+---
+
+## Correct Examples
 
 ```typescript
-// ✅ 正确：静态导入在文件顶部
+// ✅ Correct: Static imports at top of file
 import { logService } from '../services/logService';
 import { Block } from '../models/block';
 import type { IBlock } from '../models/block';
@@ -22,43 +26,51 @@ export async function processBlock(id: string) {
 }
 ```
 
-## 错误示例
+---
+
+## Incorrect Examples
 
 ```typescript
-// ❌ 错误：使用 require()
+// ❌ Wrong: Using require()
 const fs = require('fs');
 
-// ❌ 错误：使用动态导入
+// ❌ Wrong: Using dynamic import
 async function init() {
   const { logService } = await import('../services/logService');
 }
 
-// ❌ 错误：条件导入（也是动态导入）
+// ❌ Wrong: Conditional import (also dynamic)
 if (condition) {
   const module = await import('./module');
 }
 ```
 
-## 例外情况
+---
 
-以下情况可以在 ESLint 配置中单独禁用此规则：
+## Exceptions
 
-1. 配置文件加载（如加载 `.env` 文件前的早期阶段）
-2. 测试文件中的动态 mock
-3. 构建工具脚本
+The following cases may disable this rule individually in ESLint config:
 
-**注意**：脚本文件（scripts/*.mjs）正在重构中，后续将改为 TypeScript 并使用静态导入。
+1. Config file loading (early stage before loading .env files)
+2. Dynamic mocks in test files
+3. Build tool scripts
 
-## 为什么这样设计
+**Note**: Script files (scripts/*.mjs) are being refactored and will be changed to TypeScript with static imports later.
 
-1. **一致性**：统一使用 ES Module 语法，避免 CommonJS 和 ES Module 混用
-2. **可分析性**：静态导入使依赖关系清晰，便于工具分析和 tree-shaking
-3. **类型安全**：TypeScript 对静态导入提供更好的类型推断
-4. **代码规范**：导入放在文件顶部是标准做法，提高可读性
+---
 
-## ESLint 配置
+## Why This Design
 
-此规则通过 `no-restricted-syntax` 实现：
+1. **Consistency**: Unified ES Module syntax, avoiding mixed CommonJS and ES Module
+2. **Analyzable**: Static imports make dependency relationships clear for tool analysis and tree-shaking
+3. **Type-safe**: TypeScript provides better type inference for static imports
+4. **Code style**: Imports at top of file is standard practice, improves readability
+
+---
+
+## ESLint Configuration
+
+This rule is implemented via `no-restricted-syntax`:
 
 ```javascript
 'no-restricted-syntax': [
@@ -74,7 +86,9 @@ if (condition) {
 ],
 ```
 
-## 相关文件
+---
 
-- `eslint.config.mjs` - ESLint 配置文件
-- `scripts/*.mjs` - 待重构的脚本文件（当前暂时禁用此规则）
+## Related Files
+
+- `eslint.config.mjs` - ESLint configuration file
+- `scripts/*.mjs` - Script files pending refactor (this rule temporarily disabled)

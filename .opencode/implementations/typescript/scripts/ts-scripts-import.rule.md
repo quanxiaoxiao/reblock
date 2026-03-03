@@ -1,93 +1,103 @@
 # Scripts Import Rule
 
-此规则仅适用于 `scripts/**/*.mjs` 文件，规范脚本中的模块导入方式。
+This rule applies only to `scripts/**/*.mjs` files and standardizes module import patterns in scripts.
 
-## 背景
+---
 
-scripts 目录下的脚本文件使用 ES Module (`.mjs`) 格式，通过 `tsx` 直接运行 TypeScript 源码。因此必须从 `src/` 目录导入，而非编译后的 `dist/` 目录。
+## Background
 
-## 规则
+Script files in the scripts directory use ES Module (`.mjs`) format and run TypeScript source directly via `tsx`. Therefore, they must import from the `src/` directory, not the compiled `dist/` directory.
 
-### 1. 禁止从 dist 目录导入
+---
 
-**错误示例：**
+## Rules
+
+### 1. No Imports from dist Directory
+
+**Incorrect Example**:
 ```javascript
-// ❌ 错误：从 dist 目录导入
+// ❌ Wrong: Importing from dist directory
 const { logService } = await import('../dist/services/logService.js');
 const { Block } = await import('../dist/models/block.js');
 ```
 
-**正确示例：**
+**Correct Example**:
 ```javascript
-// ✅ 正确：从 src 目录导入 TypeScript 源文件
+// ✅ Correct: Importing TypeScript source from src directory
 const { logService } = await import('../src/services/logService.ts');
 const { Block } = await import('../src/models/block.ts');
 ```
 
-### 2. 必须使用动态导入格式
+### 2. Must Use Dynamic Import Format
 
-由于当前脚本文件是 `.mjs` 格式，必须使用动态导入：
+Since current script files are in `.mjs` format, dynamic imports must be used:
 
 ```javascript
-// ✅ 正确：动态导入 src 目录下的 TypeScript 文件
+// ✅ Correct: Dynamic import of TypeScript files from src directory
 const { logService } = await import('../src/services/logService.ts');
 ```
 
-## 常见场景
+---
 
-### 导入 Service
+## Common Scenarios
+
+### Importing Services
 
 ```javascript
-// ✅ 正确
+// ✅ Correct
 const { logService } = await import('../src/services/logService.ts');
 
-// ❌ 错误
+// ❌ Wrong
 const { logService } = await import('../dist/services/logService.js');
 ```
 
-### 导入 Model
+### Importing Models
 
 ```javascript
-// ✅ 正确
+// ✅ Correct
 const logEntryModule = await import('../src/models/logEntry.ts');
 const { LogCategory } = logEntryModule;
 
-// ❌ 错误
+// ❌ Wrong
 const logEntryModule = await import('../dist/models/logEntry.js');
 ```
 
-### 导入 Node.js 内置模块
+### Importing Node.js Built-in Modules
 
-Node.js 内置模块可以直接使用，不需要动态导入：
+Node.js built-in modules can be used directly without dynamic import:
 
 ```javascript
-// ✅ 正确：Node.js 内置模块
+// ✅ Correct: Node.js built-in modules
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 ```
 
-**例外**：如果在某些特殊情况下需要在运行时导入，使用标准动态导入格式：
+**Exception**: If you need to import at runtime in special cases, use standard dynamic import format:
 
 ```javascript
-// ✅ 允许：标准动态导入 Node.js 模块
+// ✅ Allowed: Standard dynamic import for Node.js modules
 const crypto = await import('crypto');
 const fs = await import('fs');
 ```
 
-## 临时性说明
+---
 
-此规则是临时方案。未来计划：
+## Temporary Note
 
-1. 将 `.mjs` 脚本重构为 `.ts` 文件
-2. 使用静态 `import` 语句替代动态导入
-3. 移除 ESLint 中对 `no-restricted-syntax` 的豁免
+This rule is a temporary solution. Future plans:
 
-重构后，scripts 目录下的代码将遵循主项目的 [import-syntax.rule.md](./import-syntax.rule.md) 规则。
+1. Refactor `.mjs` scripts to `.ts` files
+2. Use static `import` statements instead of dynamic imports
+3. Remove the `no-restricted-syntax` exemption in ESLint
 
-## ESLint 配置
+After refactoring, code in the scripts directory will follow the main project's [import-syntax.rule.md](./import-syntax.rule.md).
 
-此规则通过 `no-restricted-imports` 实现：
+---
+
+## ESLint Configuration
+
+This rule is implemented via `no-restricted-imports`:
 
 ```javascript
 'no-restricted-imports': [
@@ -103,9 +113,11 @@ const fs = await import('fs');
 ],
 ```
 
-## 相关文件
+---
 
-- `eslint.config.mjs` - ESLint 配置
-- `package.json` - npm scripts 配置（doctor, cleanup 等）
-- `scripts/*.mjs` - 受影响的脚本文件
-- [import-syntax.rule.md](./import-syntax.rule.md) - 主项目导入规则（未来 scripts 将遵循此规则）
+## Related Files
+
+- `eslint.config.mjs` - ESLint configuration
+- `package.json` - npm scripts configuration (doctor, cleanup, etc.)
+- `scripts/*.mjs` - Affected script files
+- [import-syntax.rule.md](./import-syntax.rule.md) - Main project import rules (scripts will follow this in the future)
