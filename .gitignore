@@ -17,3 +17,6 @@ deploy.mjs
 deploy.config.mjs
 deploy.back.mjs
 reblock-deploy-*.tar.gz
+
+diff-report-*
+analysis_output/
