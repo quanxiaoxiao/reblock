@@ -85,6 +85,34 @@ npm run test:coverage
 - Run `npm run lint` before committing
 - Fix linting errors with `npm run lint:fix`
 
+### DRY Principle (Don't Repeat Yourself)
+
+**Always follow DRY principle to avoid code duplication.**
+
+When you find yourself writing similar code in multiple places:
+
+1. **Extract reusable functions**: Move common logic to shared utility functions
+2. **Export from existing modules**: Re-export functions from existing routers/services when appropriate
+3. **Document the pattern**: Add comments explaining why code is shared
+
+**Example**: The legacy download routes (`/resource/:id`, `/resource/:id/preview`) reuse the download handler from `resourceRouter.ts` instead of duplicating the streaming logic:
+
+```typescript
+// legacyRouter.ts - imports and reuses instead of duplicating
+import { handleResourceDownload } from './resourceRouter';
+
+async (c: Context) => {
+  const id = c.req.param('id');
+  return handleResourceDownload(c, id, false, 'legacyStream');
+}
+```
+
+**Benefits**:
+- Single source of truth for bug fixes
+- Consistent behavior across routes
+- Smaller bundle size
+- Easier maintenance
+
 ### TypeScript
 
 - This project uses TypeScript

@@ -472,7 +472,7 @@ router.openapi(
 );
 
 // Range parser helper function
-function parseRange(header: string, total: number): { start: number; end: number } | null {
+export function parseRange(header: string, total: number): { start: number; end: number } | null {
   // Support format: bytes=start-end (e.g., bytes=0-499, bytes=500-999)
   const match = header.match(/^bytes=(\d+)-(\d+)?$/);
   if (!match) return null;
@@ -486,6 +486,174 @@ function parseRange(header: string, total: number): { start: number; end: number
   }
 
   return { start, end };
+}
+
+/**
+ * Handle resource download with Range support
+ * Extracted as reusable function to avoid code duplication (DRY principle)
+ * @param c Hono Context
+ * @param id Resource ID
+ * @param inline Whether to display inline (for video/audio) or as attachment
+ * @param operationPrefix Prefix for log operations (e.g., 'stream' or 'legacyStream')
+ * @returns Response
+ */
+export async function handleResourceDownload(
+  c: Context,
+  id: string,
+  inline: boolean,
+  operationPrefix: string = 'stream'
+): Promise<Response> {
+  try {
+    const rangeHeader = c.req.header('range');
+
+    // Handle Range request
+    if (rangeHeader) {
+      // First get resource info to know total size
+      const info = await resourceService.download(id);
+      const parsed = parseRange(rangeHeader, info.totalSize);
+
+      if (!parsed) {
+        // Invalid range
+        return c.json({
+          error: 'Range Not Satisfiable',
+          code: 'INVALID_RANGE',
+        }, 416, {
+          'Content-Range': `bytes */${info.totalSize}`,
+        });
+      }
+
+      // Get download with range
+      const result = await resourceService.download(id, parsed);
+
+      // Create decrypt stream with offset for AES-CTR range support
+      const decryptStream = createDecryptStreamWithOffset(result.iv, result.range!.start);
+
+      // Read file range and pipe through decrypt stream
+      // We need to read from the start of the block containing the range start
+      const blockSize = 16;
+      const blockStart = Math.floor(result.range!.start / blockSize) * blockSize;
+      const fileStream = createReadStream(result.filePath, {
+        start: blockStart,
+        end: result.range!.end,
+      });
+
+      // Use PassThrough to handle the pipeline
+      const passThrough = new PassThrough();
+      pipeline(fileStream, decryptStream, passThrough)
+        .then(() => {
+          metricsSnapshotService.recordDownloadSuccess(result.size);
+        })
+        .catch(async (err) => {
+          // Ensure passThrough is destroyed to free up resources
+          if (!passThrough.destroyed) {
+            passThrough.destroy(err);
+          }
+          metricsSnapshotService.recordDownloadInterrupted();
+          await logService.logIssue({
+            level: LogLevel.ERROR,
+            category: LogCategory.RUNTIME_ERROR,
+            details: {
+              operation: `${operationPrefix}DownloadWithRange`,
+              resourceId: id,
+              error: err.message,
+            },
+            suggestedAction: 'Check server logs for detailed error information',
+            recoverable: true,
+            dataLossRisk: DataLossRisk.NONE,
+            context: {
+              detectedBy: 'resourceService',
+              detectedAt: Date.now(),
+              environment: env.NODE_ENV as 'development' | 'production' | 'test',
+              stackTrace: err.stack,
+            },
+          });
+        });
+
+      const webStream = Readable.toWeb(passThrough);
+      const disposition = inline ? 'inline' : 'attachment';
+
+      return c.body(webStream, 206, {
+        'Content-Type': result.mime,
+        'Content-Disposition': `${disposition}; filename="${result.filename}"`,
+        'Content-Length': result.size.toString(),
+        'Content-Range': `bytes ${result.range!.start}-${result.range!.end}/${result.totalSize}`,
+        'Accept-Ranges': 'bytes',
+      });
+    }
+
+    // Full download (no Range header)
+    const result = await resourceService.download(id);
+
+    // Create decrypt stream
+    const decryptStream = createDecryptStream(result.iv);
+
+    // Read file and pipe through decrypt stream
+    const fileStream = createReadStream(result.filePath);
+
+    // Use PassThrough to handle the pipeline
+    const passThrough = new PassThrough();
+    pipeline(fileStream, decryptStream, passThrough)
+      .then(() => {
+        metricsSnapshotService.recordDownloadSuccess(result.totalSize);
+      })
+      .catch(async (err) => {
+        // Ensure passThrough is destroyed to free up resources
+        if (!passThrough.destroyed) {
+          passThrough.destroy(err);
+        }
+        metricsSnapshotService.recordDownloadInterrupted();
+        await logService.logIssue({
+          level: LogLevel.ERROR,
+          category: LogCategory.RUNTIME_ERROR,
+          details: {
+            operation: `${operationPrefix}Download`,
+            resourceId: id,
+            error: err.message,
+          },
+          suggestedAction: 'Check server logs for detailed error information',
+          recoverable: true,
+          dataLossRisk: DataLossRisk.NONE,
+          context: {
+            detectedBy: 'resourceService',
+            detectedAt: Date.now(),
+            environment: env.NODE_ENV as 'development' | 'production' | 'test',
+            stackTrace: err.stack,
+          },
+        });
+      });
+
+    const webStream = Readable.toWeb(passThrough);
+    const disposition = inline ? 'inline' : 'attachment';
+
+    return c.body(webStream, 200, {
+      'Content-Type': result.mime,
+      'Content-Disposition': `${disposition}; filename="${result.filename}"`,
+      'Content-Length': result.totalSize.toString(),
+      'Accept-Ranges': 'bytes',
+    });
+
+  } catch (error) {
+    if (error instanceof DownloadError) {
+      const status = error.statusCode as 404 | 416 | 500;
+      const headers: Record<string, string> = {};
+      if (status === 500) {
+        metricsSnapshotService.recordDownloadInterrupted();
+      }
+
+      // For 416 errors, include Content-Range header
+      if (status === 416) {
+        // We need to get the resource to know total size
+        // This is handled above, but for safety:
+        headers['Content-Range'] = 'bytes */0';
+      }
+
+      return c.json({
+        error: error.message,
+        code: error.code,
+      }, status, headers);
+    }
+    throw error;
+  }
 }
 
 // Download Resource with Range support
@@ -553,159 +721,9 @@ router.openapi(
     },
   }),
   async (c: Context) => {
-    try {
-      const id = c.req.param('id');
-      const inline = c.req.query('inline') === 'true';
-      const rangeHeader = c.req.header('range');
-
-      // Handle Range request
-      if (rangeHeader) {
-        // First get resource info to know total size
-        const info = await resourceService.download(id);
-        const parsed = parseRange(rangeHeader, info.totalSize);
-
-        if (!parsed) {
-          // Invalid range
-          return c.json({
-            error: 'Range Not Satisfiable',
-            code: 'INVALID_RANGE',
-          }, 416, {
-            'Content-Range': `bytes */${info.totalSize}`,
-          });
-        }
-
-        // Get download with range
-        const result = await resourceService.download(id, parsed);
-
-        // Create decrypt stream with offset for AES-CTR range support
-        const decryptStream = createDecryptStreamWithOffset(result.iv, result.range!.start);
-
-        // Read file range and pipe through decrypt stream
-        // We need to read from the start of the block containing the range start
-        const blockSize = 16;
-        const blockStart = Math.floor(result.range!.start / blockSize) * blockSize;
-        const fileStream = createReadStream(result.filePath, {
-          start: blockStart,
-          end: result.range!.end,
-        });
-        
-        // Use PassThrough to handle the pipeline
-        const passThrough = new PassThrough();
-        pipeline(fileStream, decryptStream, passThrough)
-          .then(() => {
-            metricsSnapshotService.recordDownloadSuccess(result.size);
-          })
-          .catch(async (err) => {
-            // Ensure passThrough is destroyed to free up resources
-            if (!passThrough.destroyed) {
-              passThrough.destroy(err);
-            }
-            metricsSnapshotService.recordDownloadInterrupted();
-            await logService.logIssue({
-              level: LogLevel.ERROR,
-              category: LogCategory.RUNTIME_ERROR,
-              details: {
-                operation: 'streamDownloadWithRange',
-                resourceId: id,
-                error: err.message,
-              },
-              suggestedAction: 'Check server logs for detailed error information',
-              recoverable: true,
-              dataLossRisk: DataLossRisk.NONE,
-              context: {
-                detectedBy: 'resourceService',
-                detectedAt: Date.now(),
-                environment: env.NODE_ENV as 'development' | 'production' | 'test',
-                stackTrace: err.stack,
-              },
-            });
-          });
-        
-        const webStream = Readable.toWeb(passThrough);
-        const disposition = inline ? 'inline' : 'attachment';
-
-        return c.body(webStream, 206, {
-          'Content-Type': result.mime,
-          'Content-Disposition': `${disposition}; filename="${result.filename}"`,
-          'Content-Length': result.size.toString(),
-          'Content-Range': `bytes ${result.range!.start}-${result.range!.end}/${result.totalSize}`,
-          'Accept-Ranges': 'bytes',
-        });
-      }
-
-      // Full download (no Range header)
-      const result = await resourceService.download(id);
-      
-      // Create decrypt stream
-      const decryptStream = createDecryptStream(result.iv);
-      
-      // Read file and pipe through decrypt stream
-      const fileStream = createReadStream(result.filePath);
-      
-      // Use PassThrough to handle the pipeline
-      const passThrough = new PassThrough();
-      pipeline(fileStream, decryptStream, passThrough)
-        .then(() => {
-          metricsSnapshotService.recordDownloadSuccess(result.totalSize);
-        })
-        .catch(async (err) => {
-          // Ensure passThrough is destroyed to free up resources
-          if (!passThrough.destroyed) {
-            passThrough.destroy(err);
-          }
-          metricsSnapshotService.recordDownloadInterrupted();
-          await logService.logIssue({
-            level: LogLevel.ERROR,
-            category: LogCategory.RUNTIME_ERROR,
-            details: {
-              operation: 'streamDownload',
-              resourceId: id,
-              error: err.message,
-            },
-            suggestedAction: 'Check server logs for detailed error information',
-            recoverable: true,
-            dataLossRisk: DataLossRisk.NONE,
-            context: {
-              detectedBy: 'resourceService',
-              detectedAt: Date.now(),
-              environment: env.NODE_ENV as 'development' | 'production' | 'test',
-              stackTrace: err.stack,
-            },
-          });
-        });
-      
-      const webStream = Readable.toWeb(passThrough);
-      const disposition = inline ? 'inline' : 'attachment';
-
-      return c.body(webStream, 200, {
-        'Content-Type': result.mime,
-        'Content-Disposition': `${disposition}; filename="${result.filename}"`,
-        'Content-Length': result.totalSize.toString(),
-        'Accept-Ranges': 'bytes',
-      });
-
-    } catch (error) {
-      if (error instanceof DownloadError) {
-        const status = error.statusCode as 404 | 416 | 500;
-        const headers: Record<string, string> = {};
-        if (status === 500) {
-          metricsSnapshotService.recordDownloadInterrupted();
-        }
-
-        // For 416 errors, include Content-Range header
-        if (status === 416) {
-          // We need to get the resource to know total size
-          // This is handled above, but for safety:
-          headers['Content-Range'] = 'bytes */0';
-        }
-
-        return c.json({
-          error: error.message,
-          code: error.code,
-        }, status, headers);
-      }
-      throw error;
-    }
+    const id = c.req.param('id');
+    const inline = c.req.query('inline') === 'true';
+    return handleResourceDownload(c, id, inline, 'stream');
   }
 );
 
