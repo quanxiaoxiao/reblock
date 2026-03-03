@@ -330,7 +330,8 @@ class ResourceService implements IResourceService {
       throw new DownloadError('Block not found or invalid', 404, 'BLOCK_NOT_FOUND');
     }
 
-    // Step 2: Generate storage path and IV
+    // Step 2: Generate storage path (HMAC-SHA256) and IV
+    // IMPORTANT: See storage-path-calculation.md for path algorithm
     const storageName = generateStorageName(block.sha256);
     const filePath = getStoragePath(storageName);
     const iv = generateIV(block._id);
@@ -488,6 +489,7 @@ class UploadService implements IUploadService {
 
     // Create new block
     const iv = generateIV(new Types.ObjectId());
+    // HMAC-SHA256 based storage path (see storage-path-calculation.md)
     const storageName = generateStorageName(sha256);
     const blockPath = getStoragePath(storageName);
 

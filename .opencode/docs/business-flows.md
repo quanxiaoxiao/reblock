@@ -111,6 +111,7 @@ async handleBlockDeduplication(sha256: string, size: number, tempFilePath: strin
 
   // Create new block with encryption
   const iv = generateIV(new Types.ObjectId());
+  // HMAC-SHA256 based storage path (see storage-path-calculation.md)
   const storageName = generateStorageName(sha256);
   const blockPath = getStoragePath(storageName);
 
@@ -164,7 +165,8 @@ async handleBlockDeduplication(sha256: string, size: number, tempFilePath: strin
 │  │  2. Validate block exists & is valid                             │   │
 │  │                                                                    │   │
 │  │  3. Generate storage path & IV                                    │   │
-│  │     ├─ storageName = generateStorageName(sha256)                │   │
+│  │     ├─ storageName = HMAC-SHA256(sha256)                         │   │
+│  │     │   (See: storage-path-calculation.md)                       │   │
 │  │     └─ iv = generateIV(block._id)                                │   │
 │  │                                                                    │   │
 │  │  4. Check file exists                                             │   │

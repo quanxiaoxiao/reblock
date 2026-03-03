@@ -32,6 +32,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { resolve, join, dirname } from 'path';
 import mongoose from 'mongoose';
+import { createHmac } from 'crypto';
 
 // Load environment variables
 function loadEnv() {
@@ -68,14 +69,17 @@ function initializeConfig() {
   const mongoDb = process.env.MONGO_DATABASE || 'reblock';
   const mongoUser = process.env.MONGO_USERNAME;
   const mongoPass = process.env.MONGO_PASSWORD;
-  
+
   const auth = mongoUser && mongoPass ? `${mongoUser}:${mongoPass}@` : '';
   const authSource = auth ? '?authSource=admin' : '';
   CONFIG.MONGO_URI = `mongodb://${auth}${mongoHost}:${mongoPort}/${mongoDb}${authSource}`;
-  
+
   // Get storage directory from env or use default
   const blockDir = process.env.STORAGE_BLOCK_DIR || './storage/blocks';
   CONFIG.BLOCKS_DIR = resolve(process.cwd(), blockDir);
+
+  // Get encryption key for HMAC path calculation
+  CONFIG.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 }
 
 initializeConfig();
@@ -294,10 +298,22 @@ async function restoreFromBackup(resourceId, models) {
   return backup;
 }
 
-// Get storage path for block
+// Generate storage name from sha256 using HMAC
+function generateStorageName(sha256) {
+  if (!CONFIG.ENCRYPTION_KEY) {
+    throw new Error('ENCRYPTION_KEY not configured');
+  }
+  const key = Buffer.from(CONFIG.ENCRYPTION_KEY, 'base64');
+  return createHmac('sha256', key).update(sha256).digest('hex');
+}
+
+// Get storage path for block using HMAC-based path calculation
 function getStoragePath(sha256) {
-  const prefix = sha256.substring(0, 2);
-  return join(CONFIG.BLOCKS_DIR, prefix, sha256);
+  const storageName = generateStorageName(sha256);
+  const prefix1 = storageName.substring(0, 2);
+  const secondChar = storageName.substring(2, 3);
+  const relativePath = `${prefix1}/${secondChar}${storageName}`;
+  return join(CONFIG.BLOCKS_DIR, relativePath);
 }
 
 // Corruption functions

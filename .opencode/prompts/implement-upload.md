@@ -58,7 +58,7 @@ If not found → 404.
 
 Router streams request body into:
 
-storage/_temp/{random}.upload
+storage/temp/{random}.upload
 
 NO buffering allowed.
 
@@ -88,7 +88,15 @@ IF NOT exists:
 
 - move file to:
 
-storage/_blocks/{hex(0,2)}/{hex(2)}{storageName}
+storage/blocks/{prefix1}/{secondChar}{storageName}
+
+Where:
+  - storageName = HMAC-SHA256(sha256) using ENCRYPTION_KEY
+  - prefix1 = storageName.substring(0, 2)
+  - secondChar = storageName.substring(2, 3)
+  - Example: storage/blocks/d9/8d9fe039360982785b6bbdd916b149c53...
+
+⚠️ SECURITY WARNING: Do NOT use raw sha256 as filename! Use HMAC-derived storageName.
 
 - create block:
 
