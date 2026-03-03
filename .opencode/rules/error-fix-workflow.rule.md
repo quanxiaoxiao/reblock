@@ -44,10 +44,16 @@ Before making any changes, establish a baseline:
 
 ```bash
 # Run unit tests
-npm run test
+# [Execute your project's unit test suite - specific command depends on your setup]
+make test-unit
+# OR
+./test-runner unit
 
-# Run integration tests
-npm run test:hurl
+# Run integration tests  
+# [Execute your project's integration test suite - specific command depends on your setup]
+make test-integration
+# OR
+./test-runner integration
 ```
 
 Both tests must pass before proceeding to fix.
@@ -63,10 +69,12 @@ Both tests must pass before proceeding to fix.
 
 ```bash
 # Run unit tests
-npm run test
+# [Execute your project's unit test suite - specific command depends on your setup]
+make test-unit
 
 # Run integration tests
-npm run test:hurl
+# [Execute your project's integration test suite - specific command depends on your setup]  
+make test-integration
 ```
 
 Both tests must pass. If tests fail, the fix is incomplete.
@@ -113,15 +121,19 @@ curl -X POST "http://localhost:4362/errors/{error_id}/resolve" \
 ### Before Fix (Baseline)
 
 ```bash
-npm run test    # Must pass
-npm run test:hurl  # Must pass
+# [Execute your project's unit test suite - specific command depends on your setup]
+make test-unit    # Must pass
+# [Execute your project's integration test suite - specific command depends on your setup]  
+make test-integration  # Must pass
 ```
 
 ### After Fix
 
 ```bash
-npm run test    # Must pass
-npm run test:hurl  # Must pass
+# [Execute your project's unit test suite - specific command depends on your setup]
+make test-unit    # Must pass
+# [Execute your project's integration test suite - specific command depends on your setup]
+make test-integration  # Must pass
 ```
 
 If either test fails, the fix is incomplete. Do not mark error as resolved until both tests pass.
@@ -196,7 +208,8 @@ async getById(id: string): Promise<IEntry | null> {
 
 ### 4. Run tests
 ```bash
-npm run test && npm run test:hurl
+# [Execute your project's unit and integration test suites - specific commands depend on your setup]
+make test-unit && make test-integration
 ```
 
 ### 5. Mark resolved
@@ -210,37 +223,37 @@ curl -X POST "http://localhost:4362/errors/69a3ae38c96536b31e708f3e/resolve" \
 
 ## CLI Scripts
 
-As an alternative to curl commands, you can use the npm scripts:
+As an alternative to curl commands, you can use custom scripts provided by your deployment:
 
 ### Fetch Errors
 
 ```bash
 # Fetch last 7 days open errors
-npm run errors:fetch
+./scripts/get-errors.sh
 
-# Fetch last 30 days
-npm run errors:fetch -- --days 30
+# Fetch last 30 days 
+./scripts/get-errors.sh --days 30
 
 # Fetch resolved errors
-npm run errors:fetch -- --status resolved
+./scripts/get-errors.sh --status resolved
 
 # AI-friendly export format
-npm run errors:fetch -- --export
+./scripts/get-errors.sh --format export
 
 # JSON output
-npm run errors:fetch -- --json
+./scripts/get-errors.sh --format json
 
 # Custom server
-npm run errors:fetch -- --server 192.168.1.100 --port 4362
+./scripts/get-errors.sh --server 192.168.1.100 --port 4362
 ```
 
 ### Resolve Error
 
 ```bash
-npm run errors:resolve -- --id <error_id> --resolution "Fixed by <description>"
+./scripts/resolve-error.sh --id <error_id> --resolution "Fixed by <description>"
 ```
 
-### errors:fetch Options
+### get-errors.sh Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -248,12 +261,12 @@ npm run errors:resolve -- --id <error_id> --resolution "Fixed by <description>"
 | `--status` | open | Status filter: open, acknowledged, resolved, all |
 | `--limit` | 100 | Maximum results |
 | `--offset` | 0 | Pagination offset |
-| `--json` | false | JSON output |
-| `--export` | false | AI-friendly export format |
+| `--format json` | false | JSON output |
+| `--format export` | false | AI-friendly export format |
 | `--server` | localhost | Server hostname |
 | `--port` | 4362 | Server port |
 
-### errors:resolve Options
+### resolve-error.sh Options
 
 | Option | Required | Description |
 |--------|----------|-------------|
@@ -264,22 +277,22 @@ npm run errors:resolve -- --id <error_id> --resolution "Fixed by <description>"
 
 ---
 
-## Integration with OpenCode
+## Integration with Automated Tools
 
-When using OpenCode to fix errors:
+When using AI tools or automation to fix errors:
 
-1. Ask the AI to run `npm run errors:fetch -- --export`
-2. Provide the error details to the AI
-3. Let the AI analyze and fix the code
-4. Ask the AI to verify with `npm run test && npm run test:hurl`
-5. Ask the AI to mark resolved with `npm run errors:resolve -- --id <error_id> --resolution "..."`
+1. Request execution of `./scripts/get-errors.sh --format export`
+2. Provide the error details to the automation tool
+3. Allow the tool to analyze and fix the code
+4. Request verification with `make test-unit && make test-integration`
+5. Request marking as resolved with `./scripts/resolve-error.sh --id <error_id> --resolution "..."`
 
 ## Important Notes
 
-1. **Both tests must pass**: Don't mark as resolved unless `npm run test` and `npm run test:hurl` pass
+1. **Both tests must pass**: Don't mark as resolved unless unit and integration tests pass
 2. **Provide clear resolution**: Explain what was fixed in the resolution description
 3. **Check server connectivity**: Ensure the server is running and accessible
-4. **Use --export for AI**: The export format includes all details needed for AI analysis
+4. **Use export for AI tools**: The export format includes all details needed for AI analysis
 
 ---
 
@@ -289,8 +302,8 @@ When using OpenCode to fix errors:
 - [ ] Analyze error details and stack trace
 - [ ] Identify root cause, not just symptoms
 - [ ] Make minimal, targeted fixes
-- [ ] Run `npm run test` - must pass
-- [ ] Run `npm run test:hurl` - must pass
+- [ ] Run project's unit tests - must pass
+- [ ] Run project's integration tests - must pass
 - [ ] Provide clear resolution description
 - [ ] Mark error as resolved via API
 - [ ] Verify error is filtered from open queries

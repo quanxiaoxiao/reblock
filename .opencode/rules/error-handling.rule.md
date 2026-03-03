@@ -262,29 +262,34 @@ Content-Type: application/json
 3. Handle based on error code
 4. Provide user-friendly message
 
-### Generic Client Example (Pseudocode)
+### Generic Client Example (Language-Independent Approach)
 
-```
-async function uploadFile(alias, file):
-    response = await POST(`/upload/${alias}`, file)
+CLIENT PROCEDURE uploadFile(alias, file):
+    INPUT: alias (string), file (binary/object)
+    OUTPUT: upload response or appropriate error
     
-    if response.ok:
-        return response.json()
+    SEND HTTP POST REQUEST to "/upload/" + alias with file content
+    STORE response
     
-    error = await response.json()
+    IF response status is 2xx:
+        PARSE response as JSON
+        RETURN parsed response
+    END IF
     
-    switch response.status:
-        case 413:
-            throw Error(`File too large: ${error.error}`)
-        case 415:
-            throw Error(`Invalid file type: ${error.error}`)
-        case 403:
-            throw Error(`Entry is read-only: ${error.error}`)
-        case 404:
-            throw Error(`Entry not found: ${error.error}`)
-        default:
-            throw Error(`Upload failed: ${error.error}`)
-```
+    PARSE error response as JSON
+    RESPONSE STATUS CODE determines error handling:
+        CASE 413: 
+            RAISE "File too large" error with details from response
+        CASE 415: 
+            RAISE "Invalid file type" error with details from response
+        CASE 403: 
+            RAISE "Entry is read-only" error with details from response
+        CASE 404: 
+            RAISE "Entry not found" error with details from response
+        DEFAULT: 
+            RAISE "Upload failed" error with details from response
+    END CONDITIONAL
+END PROCEDURE
 
 ---
 

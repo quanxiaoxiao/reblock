@@ -106,29 +106,30 @@ DATA STRUCTURE StatusHistoryEntry:
 
 ### Example statusHistory Entries
 
-```javascript
-// Acknowledge an issue
+```json
 {
-  status: 'acknowledged',
-  changedAt: 1772241136645,
-  changedBy: 'admin-user-123',
-  note: 'Confirmed this is a valid orphaned block issue'
+  "status": "acknowledged",
+  "changedAt": 1772241136645,
+  "changedBy": "admin-user-123",
+  "note": "Confirmed this is a valid orphaned block issue"
 }
+```
 
-// Resolve an issue
+```json
 {
-  status: 'resolved',
-  changedAt: 1772241200000,
-  changedBy: 'cleanup-script',
-  note: 'Soft deleted via cleanup script'
+  "status": "resolved", 
+  "changedAt": 1772241200000,
+  "changedBy": "cleanup-script",
+  "note": "Soft deleted via cleanup script"
 }
+```
 
-// Ignore an issue
+```json
 {
-  status: 'ignored',
-  changedAt: 1772241300000,
-  changedBy: 'system',
-  note: 'False positive - linkCount was actually correct'
+  "status": "ignored",
+  "changedAt": 1772241300000,
+  "changedBy": "system", 
+  "note": "False positive - linkCount was actually correct"
 }
 ```
 
