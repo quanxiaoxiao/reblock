@@ -23,12 +23,7 @@
 
 import { execSync } from 'child_process';
 import { existsSync, statSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import readline from 'readline';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // ─── Colors & Formatting ───────────────────────────────────────────────────
 
