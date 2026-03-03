@@ -72,26 +72,24 @@ All entities follow these rules:
 
 ### Interface
 
-```typescript
-interface IEntry {
-  _id: Types.ObjectId;
-  name: string;
-  alias: string;
-  isDefault: boolean;
-  order?: number;
-  description: string;
-  uploadConfig?: IUploadConfig;
-  createdAt: number;
-  updatedAt: number;
-  isInvalid: boolean;
-  invalidatedAt?: number;
-}
+```
+DATA STRUCTURE Entry:
+- id: ObjectId (Unique identifier)
+- name: String (Display name, trimmed)
+- alias: String (URL-friendly identifier, trimmed)
+- isDefault: Boolean (Only one default entry allowed, defaults to false)
+- order: Number (Optional display order)
+- description: String (Description text, defaults to '')
+- uploadConfig: UploadConfig (Optional upload restrictions)
+- createdAt: Number (Unix timestamp in ms, auto-generated)
+- updatedAt: Number (Unix timestamp in ms, auto-generated)
+- isInvalid: Boolean (Soft delete flag, defaults to false)
+- invalidatedAt: Number (Unix timestamp when soft deleted, optional)
 
-interface IUploadConfig {
-  maxFileSize?: number;
-  allowedMimeTypes?: string[];
-  readOnly?: boolean;
-}
+DATA STRUCTURE UploadConfig:
+- maxFileSize: Number (Optional file size limit)
+- allowedMimeTypes: Array[String] (Optional array of allowed MIME types)
+- readOnly: Boolean (Flag for read-only access, defaults to false)
 ```
 
 ### Fields
@@ -149,21 +147,20 @@ interface IUploadConfig {
 
 ### Interface
 
-```typescript
-interface IResource {
-  _id: Types.ObjectId;
-  block: Types.ObjectId | IBlock;
-  entry: Types.ObjectId | IEntry;
-  mime?: string;
-  category?: string;
-  description: string;
-  name: string;
-  createdAt: number;
-  updatedAt: number;
-  lastAccessedAt: number;
-  isInvalid: boolean;
-  invalidatedAt?: number;
-}
+```
+DATA STRUCTURE Resource:
+- id: ObjectId (Unique identifier)
+- block: ObjectId or Block (Reference to Block entity)
+- entry: ObjectId or Entry (Reference to Entry entity)
+- name: String (Display name, defaults to '')
+- mime: String (Optional MIME type, e.g., "image/png")
+- category: String (Optional category for grouping)
+- description: String (Description text, defaults to '')
+- createdAt: Number (Unix timestamp in ms, auto-generated)
+- updatedAt: Number (Unix timestamp in ms, auto-generated)
+- lastAccessedAt: Number (Last download/access time, auto-generated)
+- isInvalid: Boolean (Soft delete flag, defaults to false)
+- invalidatedAt: Number (Unix timestamp when soft deleted, optional)
 ```
 
 ### Fields
@@ -218,83 +215,76 @@ interface IResource {
 
 ### Interface
 
-```typescript
-interface ILogEntry {
-  _id: Types.ObjectId;
-  timestamp: number;
-  level: LogLevel;
-  category: LogCategory;
-  blockId?: Types.ObjectId;
-  blockSha256?: string;
-  resourceIds?: Types.ObjectId[];
-  entryIds?: Types.ObjectId[];
-  details?: Record<string, unknown>;
-  actualState?: {
-    refCount?: number;
-    fileExists?: boolean;
-    fileSize?: number;
-    duplicateBlocks?: Types.ObjectId[];
-  };
-  context: {
-    detectedBy: 'doctor' | 'cleanup' | 'resourceService' | 'uploadService' | 'system';
-    detectedAt: number;
-    scriptVersion?: string;
-    serverVersion?: string;
-    environment: 'development' | 'production' | 'test';
-    originalCreatedAt?: number;
-    daysSinceCreation?: number;
-    lastAccessedAt?: number;
-    stackTrace?: string;
-    requestId?: string;
-    userAgent?: string;
-  };
-  suggestedAction?: string;
-  recoverable?: boolean;
-  dataLossRisk?: DataLossRisk;
-  recoverySteps?: string[];
-  status: 'open' | 'acknowledged' | 'resolved' | 'ignored';
-  statusHistory?: {
-    status: string;
-    changedAt: number;
-    changedBy?: string;
-    note?: string;
-  }[];
-  resolvedAt?: number;
-  resolution?: string;
-  resolvedBy?: string;
-  createdAt: number;
-  expiresAt: number;  // TTL: 90 days
-}
+```
+DATA STRUCTURE LogEntry:
+- id: ObjectId (Unique identifier)
+- timestamp: Number (Unix timestamp when log created)
+- level: Enum LogLevel (CRITICAL, ERROR, WARNING, INFO)
+- category: Enum LogCategory (Category of the issue)
+- blockId: Optional ObjectId (Associated block ID)
+- blockSha256: Optional String (Block content SHA256 for quick lookup)
+- resourceIds: Optional Array[ObjectId] (Affected resource IDs)
+- entryIds: Optional Array[ObjectId] (Affected entry IDs)
+- details: Optional Map[String, Unknown] (Additional details about the issue)
+- actualState: Optional Object (Actual state information)
+  - refCount: Optional Number (Actual reference count)
+  - fileExists: Optional Boolean (Physical file existence)
+  - fileSize: Optional Number (Actual file size)
+  - duplicateBlocks: Optional Array[ObjectId] (Other blocks with same SHA256)
+- context: Object (Context information)
+  - detectedBy: String (Source of detection: doctor, cleanup, resourceService, uploadService, system)
+  - detectedAt: Number (Detection timestamp)
+  - scriptVersion: Optional String (Version of detection script)
+  - serverVersion: Optional String (Application version)
+  - environment: Enum ('development', 'production', 'test') (Execution environment)
+  - originalCreatedAt: Optional Number (Original creation timestamp)
+  - daysSinceCreation: Optional Number (Age in days)
+  - lastAccessedAt: Optional Number (Last access time)
+  - stackTrace: Optional String (Error stack trace)
+  - requestId: Optional String (HTTP request ID for tracing)
+  - userAgent: Optional String (Client user agent)
+- suggestedAction: Optional String (Human-readable recommended action)
+- recoverable: Optional Boolean (Whether issue can be recovered)
+- dataLossRisk: Optional Enum DataLossRisk ('none', 'low', 'medium', 'high') (Data loss risk level)
+- recoverySteps: Optional Array[String] (Step-by-step recovery instructions)
+- status: Enum ('open', 'acknowledged', 'resolved', 'ignored') (Log status)
+- statusHistory: Optional Array[Object] (History of status changes)
+  - status: String (Changed status)
+  - changedAt: Number (Time of change)
+  - changedBy: Optional String (Who made the change)
+  - note: Optional String (Additional notes)
+- resolvedAt: Optional Number (Resolution timestamp)
+- resolution: Optional String (Resolution description)
+- resolvedBy: Optional String (Resolver identity)
+- createdAt: Number (Entity creation timestamp)
+- expiresAt: Number (Expiration timestamp, TTL: 90 days)
 ```
 
 ### Enums
 
-```typescript
-enum LogLevel {
-  CRITICAL = 'CRITICAL',
-  ERROR = 'ERROR',
-  WARNING = 'WARNING',
-  INFO = 'INFO'
-}
+```
+ENUM LogLevel:
+- CRITICAL: 'CRITICAL'
+- ERROR: 'ERROR'
+- WARNING: 'WARNING'
+- INFO: 'INFO'
 
-enum LogCategory {
-  ORPHANED_BLOCK = 'ORPHANED_BLOCK',
-  MISSING_FILE = 'MISSING_FILE',
-  DUPLICATE_SHA256 = 'DUPLICATE_SHA256',
-  LINKCOUNT_MISMATCH = 'LINKCOUNT_MISMATCH',
-  FILE_SIZE_MISMATCH = 'FILE_SIZE_MISMATCH',
-  CLEANUP_ACTION = 'CLEANUP_ACTION',
-  CLEANUP_ERROR = 'CLEANUP_ERROR',
-  RUNTIME_ERROR = 'RUNTIME_ERROR',
-  DATA_INCONSISTENCY = 'DATA_INCONSISTENCY'
-}
+ENUM LogCategory:
+- ORPHANED_BLOCK: 'ORPHANED_BLOCK'
+- MISSING_FILE: 'MISSING_FILE'
+- DUPLICATE_SHA256: 'DUPLICATE_SHA256'
+- LINKCOUNT_MISMATCH: 'LINKCOUNT_MISMATCH'
+- FILE_SIZE_MISMATCH: 'FILE_SIZE_MISMATCH'
+- CLEANUP_ACTION: 'CLEANUP_ACTION'
+- CLEANUP_ERROR: 'CLEANUP_ERROR'
+- RUNTIME_ERROR: 'RUNTIME_ERROR'
+- DATA_INCONSISTENCY: 'DATA_INCONSISTENCY'
 
-enum DataLossRisk {
-  NONE = 'none',
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high'
-}
+ENUM DataLossRisk:
+- NONE: 'none'
+- LOW: 'low'
+- MEDIUM: 'medium'
+- HIGH: 'high'
 ```
 
 ### Fields

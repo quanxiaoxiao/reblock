@@ -77,10 +77,13 @@ This document defines the error handling patterns for the Reblock service.
 
 ### Not Found (404)
 
-```http
-GET /resources/60d21b4667d0d8992e610c99
+```bash
+curl -X GET "http://localhost:3000/resources/60d21b4667d0d8992e610c99"
 
-HTTP 404 Not Found
+# Response:
+HTTP/1.1 404 Not Found
+Content-Type: application/json
+
 {
   "error": "Resource not found",
   "code": "NOT_FOUND"
@@ -89,16 +92,18 @@ HTTP 404 Not Found
 
 ### Conflict - Alias Exists (409)
 
-```http
-POST /entries
+```bash
+curl -X POST "http://localhost:3000/entries" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Another Entry",
+    "alias": "my-docs"
+  }'
+
+# Response:
+HTTP/1.1 409 Conflict
 Content-Type: application/json
 
-{
-  "name": "Another Entry",
-  "alias": "my-docs"
-}
-
-HTTP 409 Conflict
 {
   "error": "alias already exists",
   "code": "ALREADY_EXISTS"
@@ -107,16 +112,18 @@ HTTP 409 Conflict
 
 ### Validation Error (400)
 
-```http
-POST /entries
+```bash
+curl -X POST "http://localhost:3000/entries" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "",
+    "alias": "invalid alias!"
+  }'
+
+# Response:
+HTTP/1.1 400 Bad Request
 Content-Type: application/json
 
-{
-  "name": "",
-  "alias": "invalid alias!"
-}
-
-HTTP 400 Bad Request
 {
   "error": "Validation error",
   "details": [
@@ -134,13 +141,15 @@ HTTP 400 Bad Request
 
 ### File Too Large (413)
 
-```http
-POST /upload/my-docs
-Content-Type: application/octet-stream
+```bash
+curl -X POST "http://localhost:3000/upload/my-docs" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @[large_file_path]
 
-[11MB file content]
+# Response:
+HTTP/1.1 413 Payload Too Large
+Content-Type: application/json
 
-HTTP 413 Payload Too Large
 {
   "error": "File too large",
   "code": "FILE_TOO_LARGE"
@@ -149,13 +158,15 @@ HTTP 413 Payload Too Large
 
 ### Invalid MIME Type (415)
 
-```http
-POST /upload/my-docs
-Content-Type: application/exe
+```bash
+curl -X POST "http://localhost:3000/upload/my-docs" \
+  -H "Content-Type: application/exe" \
+  --data-binary @[executable_file_path]
 
-[executable file content]
+# Response:
+HTTP/1.1 415 Unsupported Media Type
+Content-Type: application/json
 
-HTTP 415 Unsupported Media Type
 {
   "error": "File type not allowed",
   "code": "INVALID_MIME_TYPE"
@@ -164,13 +175,15 @@ HTTP 415 Unsupported Media Type
 
 ### Read-only Entry (403)
 
-```http
-POST /upload/read-only-entry
-Content-Type: application/octet-stream
+```bash
+curl -X POST "http://localhost:3000/upload/read-only-entry" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @[file_content_path]
 
-[file content]
+# Response:
+HTTP/1.1 403 Forbidden
+Content-Type: application/json
 
-HTTP 403 Forbidden
 {
   "error": "Entry is read-only",
   "code": "READ_ONLY"
@@ -179,12 +192,14 @@ HTTP 403 Forbidden
 
 ### Range Not Satisfiable (416)
 
-```http
-GET /resources/60d21b4667d0d8992e610c87/download
-Range: bytes=10000-20000
+```bash
+curl -X GET "http://localhost:3000/resources/60d21b4667d0d8992e610c87/download" \
+  -H "Range: bytes=10000-20000"
 
-HTTP 416 Range Not Satisfiable
+# Response:
+HTTP/1.1 416 Range Not Satisfiable
 Content-Range: bytes */1024000
+Content-Type: application/json
 
 {
   "error": "Range Not Satisfiable",
@@ -194,10 +209,13 @@ Content-Range: bytes */1024000
 
 ### Internal Server Error (500)
 
-```http
-GET /resources/60d21b4667d0d8992e610c87/download
+```bash
+curl -X GET "http://localhost:3000/resources/60d21b4667d0d8992e610c87/download"
 
-HTTP 500 Internal Server Error
+# Response:
+HTTP/1.1 500 Internal Server Error
+Content-Type: application/json
+
 {
   "error": "Block file not found: /storage/blocks/d9/8d9fe...",
   "code": "FILE_MISSING"

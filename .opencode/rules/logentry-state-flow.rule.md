@@ -96,13 +96,12 @@ LogEntry tracks the lifecycle of detected issues from discovery through resoluti
 
 Every state transition MUST record an entry in the `statusHistory` array:
 
-```typescript
-interface StatusHistoryEntry {
-  status: string;           // New status: 'open' | 'acknowledged' | 'resolved' | 'ignored'
-  changedAt: number;        // Unix timestamp (ms) when status changed
-  changedBy?: string;       // Who or what made the change (user ID or system)
-  note?: string;            // Explanation of why the status changed
-}
+```
+DATA STRUCTURE StatusHistoryEntry:
+- status: String (New status: 'open', 'acknowledged', 'resolved', 'ignored')
+- changedAt: Number (Unix timestamp in ms when status changed)
+- changedBy: Optional String (Who or what made the change, e.g., user ID or system name)
+- note: Optional String (Explanation of why status was changed)
 ```
 
 ### Example statusHistory Entries
@@ -206,29 +205,29 @@ Response: Updated LogEntry
 
 ### Find Open Issues
 
-```typescript
-LogEntry.find({
-  status: 'open',
-  timestamp: { $gte: sinceTimestamp }
-}).sort({ timestamp: -1 })
+```
+QUERY LogEntry WHERE:
+- status = 'open'
+- timestamp >= sinceTimestamp
+ORDER BY timestamp DESCENDING
 ```
 
 ### Find Issues Needing Attention
 
-```typescript
-LogEntry.find({
-  status: { $in: ['open', 'acknowledged'] },
-  level: { $in: ['CRITICAL', 'ERROR'] }
-}).sort({ level: -1, timestamp: -1 })
+```
+QUERY LogEntry WHERE:
+- status IN ['open', 'acknowledged']
+- level IN ['CRITICAL', 'ERROR']
+ORDER BY level DESCENDING, timestamp DESCENDING
 ```
 
 ### Find Recent Resolutions
 
-```typescript
-LogEntry.find({
-  status: 'resolved',
-  resolvedAt: { $gte: sinceTimestamp }
-}).sort({ resolvedAt: -1 })
+```
+QUERY LogEntry WHERE:
+- status = 'resolved'
+- resolvedAt >= sinceTimestamp
+ORDER BY resolvedAt DESCENDING
 ```
 
 ---

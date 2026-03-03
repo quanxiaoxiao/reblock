@@ -19,21 +19,20 @@ This document provides complete request/response examples for all Reblock API en
 ### Create Entry
 
 **Request:**
-```http
-POST /entries
-Content-Type: application/json
-
-{
-  "name": "My Documents",
-  "alias": "my-docs",
-  "description": "Personal document storage",
-  "isDefault": false,
-  "uploadConfig": {
-    "maxFileSize": 10485760,
-    "allowedMimeTypes": ["application/pdf", "image/*"],
-    "readOnly": false
-  }
-}
+```bash
+curl -X POST "http://localhost:3000/entries" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Documents",
+    "alias": "my-docs",
+    "description": "Personal document storage",
+    "isDefault": false,
+    "uploadConfig": {
+      "maxFileSize": 10485760,
+      "allowedMimeTypes": ["application/pdf", "image/*"],
+      "readOnly": false
+    }
+  }'
 ```
 
 **Success Response (201 Created):**
@@ -60,18 +59,17 @@ Content-Type: application/json
 ### Update Entry
 
 **Request:**
-```http
-PUT /entries/60d21b4667d0d8992e610c85
-Content-Type: application/json
-
-{
-  "name": "My Updated Documents",
-  "description": "Updated description",
-  "uploadConfig": {
-    "maxFileSize": 52428800,
-    "readOnly": false
-  }
-}
+```bash
+curl -X PUT "http://localhost:3000/entries/60d21b4667d0d8992e610c85" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Updated Documents",
+    "description": "Updated description",
+    "uploadConfig": {
+      "maxFileSize": 52428800,
+      "readOnly": false
+    }
+  }'
 ```
 
 **Success Response (200 OK):**
@@ -105,15 +103,14 @@ Content-Type: application/json
 ### Update Entry Upload Config
 
 **Request:**
-```http
-PATCH /entries/60d21b4667d0d8992e610c85/upload-config
-Content-Type: application/json
-
-{
-  "maxFileSize": 104857600,
-  "allowedMimeTypes": ["image/*", "video/*"],
-  "readOnly": false
-}
+```bash
+curl -X PATCH "http://localhost:3000/entries/60d21b4667d0d8992e610c85/upload-config" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "maxFileSize": 104857600,
+    "allowedMimeTypes": ["image/*", "video/*"],
+    "readOnly": false
+  }'
 ```
 
 **Success Response (200 OK):**
@@ -138,18 +135,17 @@ Content-Type: application/json
 ### Create Resource
 
 **Request:**
-```http
-POST /resources
-Content-Type: application/json
-
-{
-  "block": "60d21b4667d0d8992e610c86",
-  "entry": "60d21b4667d0d8992e610c85",
-  "name": "document.pdf",
-  "mime": "application/pdf",
-  "category": "documents",
-  "description": "Important document"
-}
+```bash
+curl -X POST "http://localhost:3000/resources" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "block": "60d21b4667d0d8992e610c86",
+    "entry": "60d21b4667d0d8992e610c85",
+    "name": "document.pdf",
+    "mime": "application/pdf",
+    "category": "documents",
+    "description": "Important document"
+  }'
 ```
 
 **Success Response (201 Created):**
@@ -175,15 +171,14 @@ Content-Type: application/json
 ### Update Resource
 
 **Request:**
-```http
-PUT /resources/60d21b4667d0d8992e610c87
-Content-Type: application/json
-
-{
-  "name": "updated-document.pdf",
-  "description": "Updated important document",
-  "category": "archives"
-}
+```bash
+curl -X PUT "http://localhost:3000/resources/60d21b4667d0d8992e610c87" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "updated-document.pdf",
+    "description": "Updated important document",
+    "category": "archives"
+  }'
 ```
 
 **Success Response (200 OK):**
@@ -214,17 +209,16 @@ Content-Type: application/json
 ### Update Resource Block (with Transaction)
 
 **Request:**
-```http
-PATCH /resources/60d21b4667d0d8992e610c87/block
-Content-Type: application/json
-
-{
-  "newBlockId": "60d21b4667d0d8992e610c88",
-  "changedBy": "user-123",
-  "reason": "Updating to new version",
-  "requestId": "req-abc-123",
-  "expectedUpdatedAt": 1772241136645
-}
+```bash
+curl -X PATCH "http://localhost:3000/resources/60d21b4667d0d8992e610c87/block" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "newBlockId": "60d21b4667d0d8992e610c88",
+    "changedBy": "user-123",
+    "reason": "Updating to new version",
+    "requestId": "req-abc-123",
+    "expectedUpdatedAt": 1772241136645
+  }'
 ```
 
 **Success Response (200 OK):**
@@ -251,8 +245,8 @@ Content-Type: application/json
 ### Get Resource Block Change History
 
 **Request:**
-```http
-GET /resources/60d21b4667d0d8992e610c87/history?limit=50&offset=0
+```bash
+curl -X GET "http://localhost:3000/resources/60d21b4667d0d8992e610c87/history?limit=50&offset=0"
 ```
 
 **Success Response (200 OK):**
@@ -293,15 +287,14 @@ GET /resources/60d21b4667d0d8992e610c87/history?limit=50&offset=0
 ### Rollback Resource Block
 
 **Request:**
-```http
-POST /resources/60d21b4667d0d8992e610c87/rollback
-Content-Type: application/json
-
-{
-  "historyId": "60d21b4667d0d8992e610c90",
-  "changedBy": "user-123",
-  "requestId": "req-ghi-789"
-}
+```bash
+curl -X POST "http://localhost:3000/resources/60d21b4667d0d8992e610c87/rollback" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "historyId": "60d21b4667d0d8992e610c90",
+    "changedBy": "user-123",
+    "requestId": "req-ghi-789"
+  }'
 ```
 
 **Success Response (200 OK):**
@@ -328,8 +321,8 @@ Content-Type: application/json
 ### Get Block by ID
 
 **Request:**
-```http
-GET /blocks/60d21b4667d0d8992e610c86
+```bash
+curl -X GET "http://localhost:3000/blocks/60d21b4667d0d8992e610c86"
 ```
 
 **Success Response (200 OK):**
@@ -357,8 +350,8 @@ GET /blocks/60d21b4667d0d8992e610c86
 ### List Blocks
 
 **Request:**
-```http
-GET /blocks?limit=10&offset=0
+```bash
+curl -X GET "http://localhost:3000/blocks?limit=10&offset=0"
 ```
 
 **Success Response (200 OK):**
@@ -397,11 +390,10 @@ GET /blocks?limit=10&offset=0
 ### Upload File to Entry
 
 **Request:**
-```http
-POST /upload/my-docs?name=report.pdf
-Content-Type: application/pdf
-
-[binary file content]
+```bash
+curl -X POST "http://localhost:3000/upload/my-docs?name=report.pdf" \
+  -H "Content-Type: application/pdf" \
+  --data-binary @[file_path]
 ```
 
 **Success Response (201 Created):**
@@ -453,14 +445,13 @@ Content-Type: application/pdf
 ### Acknowledge an Issue
 
 **Request:**
-```http
-POST /errors/60d21b4667d0d8992e610c93/acknowledge
-Content-Type: application/json
-
-{
-  "note": "Confirmed this is a valid orphaned block",
-  "changedBy": "admin-123"
-}
+```bash
+curl -X POST "http://localhost:3000/errors/60d21b4667d0d8992e610c93/acknowledge" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "note": "Confirmed this is a valid orphaned block",
+    "changedBy": "admin-123"
+  }'
 ```
 
 **Success Response (200 OK):**
@@ -485,15 +476,14 @@ Content-Type: application/json
 ### Resolve an Issue
 
 **Request:**
-```http
-POST /errors/60d21b4667d0d8992e610c93/resolve
-Content-Type: application/json
-
-{
-  "resolution": "Soft deleted the orphaned block via cleanup script",
-  "resolvedBy": "cleanup-script",
-  "note": "Cleanup executed successfully"
-}
+```bash
+curl -X POST "http://localhost:3000/errors/60d21b4667d0d8992e610c93/resolve" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "resolution": "Soft deleted the orphaned block via cleanup script",
+    "resolvedBy": "cleanup-script",
+    "note": "Cleanup executed successfully"
+  }'
 ```
 
 **Success Response (200 OK):**
@@ -527,14 +517,13 @@ Content-Type: application/json
 ### Ignore an Issue
 
 **Request:**
-```http
-POST /errors/60d21b4667d0d8992e610c93/ignore
-Content-Type: application/json
-
-{
-  "note": "False positive - data was actually consistent",
-  "changedBy": "system"
-}
+```bash
+curl -X POST "http://localhost:3000/errors/60d21b4667d0d8992e610c93/ignore" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "note": "False positive - data was actually consistent",
+    "changedBy": "system"
+  }'
 ```
 
 **Success Response (200 OK):**

@@ -27,11 +27,11 @@ All field values must adhere to these constraints to ensure:
 | Example | `"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0"` |
 
 **Validation:**
-```typescript
-const sha256Regex = /^[a-f0-9]{64}$/;
-if (!sha256Regex.test(sha256)) {
-  throw new Error('Invalid SHA256 format');
-}
+```
+VALIDATE sha256 using regular expression /^[a-f0-9]{64}$/
+IF validation fails:
+    THROW error "Invalid SHA256 format"
+END IF
 ```
 
 ### size
@@ -45,13 +45,13 @@ if (!sha256Regex.test(sha256)) {
 | Integer | Yes (must be whole number) |
 
 **Validation:**
-```typescript
-if (size < 0 || size > 10 * 1024 * 1024 * 1024) {
-  throw new Error('File size out of bounds (0-10GB)');
-}
-if (!Number.isInteger(size)) {
-  throw new Error('Size must be an integer');
-}
+```
+IF size < 0 OR size > 10 * 1024 * 1024 * 1024 (10GB):
+    THROW error "File size out of bounds (0-10GB)"
+END IF
+IF size is not an integer:
+    THROW error "Size must be an integer"
+END IF
 ```
 
 ### linkCount
@@ -83,11 +83,11 @@ if (!Number.isInteger(size)) {
 | Characters | Any Unicode |
 
 **Validation:**
-```typescript
-const trimmed = name.trim();
-if (trimmed.length < 1 || trimmed.length > 255) {
-  throw new Error('Name must be 1-255 characters');
-}
+```
+SET trimmed = name.trimmed()
+IF length of trimmed < 1 OR length of trimmed > 255:
+    THROW error "Name must be 1-255 characters"
+END IF
 ```
 
 ### alias
@@ -103,15 +103,17 @@ if (trimmed.length < 1 || trimmed.length > 255) {
 | Uniqueness | Unique among non-invalid entries |
 
 **Validation:**
-```typescript
-const aliasRegex = /^[a-z0-9-_]*$/;
-const trimmed = alias.trim();
-if (trimmed.length > 100) {
-  throw new Error('Alias too long (max 100)');
-}
-if (!aliasRegex.test(trimmed)) {
-  throw new Error('Alias can only contain lowercase letters, numbers, dash, and underscore');
-}
+```
+DEFINE aliasPattern AS regex /^[a-z0-9-_]*$/
+SET trimmed = alias.trimmed()
+
+IF length of trimmed > 100:
+    THROW error "Alias too long (max 100)"
+END IF
+
+IF trimmed does not match aliasPattern:
+    THROW error "Alias can only contain lowercase letters, numbers, dash, and underscore"
+END IF
 ```
 
 ### description
@@ -443,7 +445,8 @@ When implementing field validation:
 
 ### Field Validation Error Format
 
-```typescript
+```
+RESPONSE:
 {
   error: "Field validation failed",
   code: "VALIDATION_ERROR",

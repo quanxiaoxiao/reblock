@@ -17,36 +17,32 @@ Production:  https://your-domain.com
 
 ### Pagination
 
-```typescript
-interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  limit?: number;   // Items per page
-  offset?: number; // 0-based starting index
-}
+```
+DATA STRUCTURE PaginatedResponse:
+- items: Array[T] (Array of requested entities)
+- total: Number (Total count, regardless of pagination)
+- limit: Optional Number (Items per page)
+- offset: Optional Number (0-based starting index)
 ```
 
 ### Error Response
 
-```typescript
-interface ErrorResponse {
-  error: string;   // Human-readable error message
-  code?: string;   // Optional error code for programmatic handling
-}
+```
+DATA STRUCTURE ErrorResponse:
+- error: String (Human-readable error message)
+- code: Optional String (Error code for programmatic handling)
 ```
 
 ### Timestamp Fields (All Entities)
 
-```typescript
-interface TimestampFields {
-  createdAt: number;  // Unix timestamp (ms)
-  updatedAt: number;  // Unix timestamp (ms)
-}
+```
+DATA STRUCTURE TimestampFields:
+- createdAt: Number (Unix timestamp in ms)
+- updatedAt: Number (Unix timestamp in ms)
 
-interface SoftDeleteFields {
-  isInvalid: boolean;    // true = soft deleted
-  invalidatedAt?: number; // Unix timestamp when deleted
-}
+DATA STRUCTURE SoftDeleteFields:
+- isInvalid: Boolean (True means soft deleted)
+- invalidatedAt: Optional Number (Unix timestamp when deleted)
 ```
 
 ---

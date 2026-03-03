@@ -60,21 +60,18 @@ Status: 409 Conflict
 2. If not changing default status, skip
 
 **Action Logic:**
-```typescript
-async function ensureSingleDefault(excludeId?: string): Promise<void> {
-  // Unset default from all other entries
-  await Entry.updateMany(
-    {
-      isDefault: true,
-      isInvalid: { $ne: true },
-      ...(excludeId ? { _id: { $ne: excludeId } } : {})
-    },
-    {
-      isDefault: false,
-      updatedAt: Date.now()
-    }
-  );
-}
+```
+FUNCTION ensureSingleDefault(excludeId = NULL):
+    QUERY all entries WHERE isDefault = true AND isInvalid ≠ true 
+    IF excludeId provided THEN
+        EXCLUDE entry with _id = excludeId
+    END IF
+    
+    UPDATE all matched entries:
+        SET isDefault = false
+        SET updatedAt = current timestamp
+    END UPDATE
+END FUNCTION
 ```
 
 **Note:** This operation should be done BEFORE setting the new default entry.
@@ -91,21 +88,19 @@ async function ensureSingleDefault(excludeId?: string): Promise<void> {
 - `POST /upload/:alias` - Any upload attempt
 
 **Validation Logic:**
-```typescript
-async function validateEntryNotReadOnly(alias: string): Promise<void> {
-  const entry = await Entry.findOne({
-    alias: alias.trim(),
-    isInvalid: { $ne: true }
-  });
-  
-  if (!entry) {
-    throw new Error('Entry not found');
-  }
-  
-  if (entry.uploadConfig?.readOnly) {
-    throw new UploadBusinessError('Entry is read-only', 403);
-  }
-}
+```
+FUNCTION validateEntryNotReadOnly(alias: STRING): VOID
+    QUERY entry WHERE alias = alias.trimmed() AND isInvalid ≠ true
+    RESULT stored in entry
+    
+    IF entry does not exist THEN
+        THROW error 'Entry not found'
+    END IF
+    
+    IF entry.uploadConfig.readOnly = true THEN
+        THROW UploadBusinessError 'Entry is read-only', status 403
+    END IF
+END FUNCTION
 ```
 
 **Error Response:**
@@ -136,14 +131,16 @@ Status: 403 Forbidden
 3. Get file size from temp file
 
 **Validation Logic:**
-```typescript
-function validateFileSize(size: number, uploadConfig?: IUploadConfig): void {
-  if (!uploadConfig?.maxFileSize) return;
-  
-  if (size > uploadConfig.maxFileSize) {
-    throw new UploadBusinessError('File too large', 413);
-  }
-}
+```
+FUNCTION validateFileSize(size: NUMBER, uploadConfig: UPLOAD_CONFIG): VOID
+    IF uploadConfig.maxFileSize not provided THEN
+        RETURN (skip validation)
+    END IF
+    
+    IF size > uploadConfig.maxFileSize THEN
+        THROW UploadBusinessError 'File too large', status 413
+    END IF
+END FUNCTION
 ```
 
 **Error Response:**
@@ -172,22 +169,32 @@ Status: 413 Payload Too Large
 3. Detect actual MIME type from file content
 
 **Validation Logic:**
-```typescript
-function validateMimeType(detectedMime: string, uploadConfig?: IUploadConfig): void {
-  if (!uploadConfig?.allowedMimeTypes?.length) return;
-  
-  const isAllowed = uploadConfig.allowedMimeTypes.some(pattern => {
-    if (pattern.endsWith('/*')) {
-      const prefix = pattern.slice(0, -1);
-      return detectedMime.startsWith(prefix);
-    }
-    return detectedMime === pattern;
-  });
-  
-  if (!isAllowed) {
-    throw new UploadBusinessError('File type not allowed', 415);
-  }
-}
+```
+FUNCTION validateMimeType(detectedMime: STRING, uploadConfig: UPLOAD_CONFIG): VOID
+    IF uploadConfig.allowedMimeTypes not provided OR empty THEN
+        RETURN (skip validation)
+    END IF
+    
+    isAllowed = FALSE
+    FOR each pattern IN uploadConfig.allowedMimeTypes:
+        IF pattern ends with '/*' THEN
+            prefix = pattern without last two characters (* and /)
+            IF detectedMime starts with prefix THEN
+                isAllowed = TRUE
+                BREAK loop
+            END IF
+        ELSE
+            IF detectedMime equals pattern THEN
+                isAllowed = TRUE
+                BREAK loop
+            END IF
+        END IF
+    END FOR
+    
+    IF NOT isAllowed THEN
+        THROW UploadBusinessError 'File type not allowed', status 415
+    END IF
+END FUNCTION
 ```
 
 **Error Response:**
@@ -211,29 +218,22 @@ Status: 415 Unsupported Media Type
 - `POST /upload/:alias` - After file validation, before block creation
 
 **Logic:**
-```typescript
-async function handleBlockDeduplication(
-  sha256: string,
-  size: number,
-  tempFilePath: string
-): Promise<IBlock> {
-  // Check for existing valid block with same SHA256
-  const existingBlock = await Block.findOne({
-    sha256,
-    isInvalid: { $ne: true }
-  });
-  
-  if (existingBlock) {
-    // Increment link count and reuse
-    existingBlock.linkCount += 1;
-    existingBlock.updatedAt = Date.now();
-    await existingBlock.save();
-    return existingBlock;
-  }
-  
-  // Create new block (full logic omitted)
-  return createNewBlock(sha256, size, tempFilePath);
-}
+```
+FUNCTION handleBlockDeduplication(sha256: STRING, size: NUMBER, tempFilePath: STRING): BLOCK
+    QUERY for existing valid block WHERE sha256 = sha256 AND isInvalid ≠ true
+    RESULT stored in existingBlock
+    
+    IF existingBlock exists THEN
+        // Increment link count and reuse
+        INCREMENT existingBlock.linkCount by 1
+        SET existingBlock.updatedAt to current timestamp
+        SAVE existingBlock
+        RETURN existingBlock
+    END IF
+    
+    // Create new block (full logic omitted)
+    RETURN createNewBlock(sha256, size, tempFilePath)
+END FUNCTION
 ```
 
 **Note:** This is an optimization rule, not an error rule.
@@ -253,16 +253,13 @@ async function handleBlockDeduplication(
 - `POST /upload/:alias` - When upload creates a resource
 
 **Action:**
-```typescript
-async function incrementLinkCount(blockId: ObjectId): Promise<void> {
-  await Block.findByIdAndUpdate(
-    blockId,
-    {
-      $inc: { linkCount: 1 },
-      updatedAt: Date.now()
-    }
-  );
-}
+```
+FUNCTION incrementLinkCount(blockId: OBJECT_ID): VOID
+    UPDATE Block WHERE _id = blockId:
+        INCREMENT linkCount by 1
+        SET updatedAt to current timestamp
+    END UPDATE
+END FUNCTION
 ```
 
 ---
@@ -277,23 +274,20 @@ async function incrementLinkCount(blockId: ObjectId): Promise<void> {
 - `DELETE /resources/:id` - When deleting a resource
 
 **Action:**
-```typescript
-async function decrementLinkCount(blockId: ObjectId): Promise<void> {
-  await Block.findByIdAndUpdate(
-    blockId,
-    {
-      $inc: { linkCount: -1 },
-      updatedAt: Date.now()
-    }
-  );
-  
-  // Ensure linkCount doesn't go negative
-  const block = await Block.findById(blockId);
-  if (block && block.linkCount < 0) {
-    block.linkCount = 0;
-    await block.save();
-  }
-}
+```
+FUNCTION decrementLinkCount(blockId: OBJECT_ID): VOID
+    UPDATE Block WHERE _id = blockId:
+        DECREMENT linkCount by 1
+        SET updatedAt to current timestamp
+    END UPDATE
+    
+    // Ensure linkCount doesn't go negative
+    block = QUERY Block WHERE _id = blockId
+    IF block AND block.linkCount < 0 THEN
+        SET block.linkCount to 0
+        SAVE block
+    END IF
+END FUNCTION
 ```
 
 ---
@@ -356,11 +350,11 @@ Status: 409 Conflict
 - Doctor script execution (`node scripts/doctor.mjs`)
 
 **Detection Query:**
-```typescript
-const orphanedBlocks = await Block.find({
-  linkCount: 0,
-  isInvalid: false
-});
+```
+QUERY orphanedBlocks:
+    FROM Block
+    WHERE linkCount = 0 AND isInvalid = false
+END QUERY
 ```
 
 **Action:** Log issue with category `ORPHANED_BLOCK`.
