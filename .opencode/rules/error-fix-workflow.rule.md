@@ -1,6 +1,9 @@
 # Error Fix Workflow Rule
 
-This rule defines the workflow for fixing 500 errors in the Reblock service.
+This rule defines the theoretical workflow for fixing 500 errors.
+
+> **Note**: For practical implementation with specific commands for the Reblock project,
+> see [error-fix-assist.md](../prompts/error-fix-assist.md).
 
 ## Overview
 
@@ -22,14 +25,14 @@ When a 500 error occurs, use this workflow to:
 
 ```bash
 # Get list of unresolved errors
-curl "http://localhost:4362/errors?days=7&status=open"
+curl "http://localhost:${API_PORT}/errors?days=7&status=open"
 ```
 
 ### Step 3: Analyze Error
 
 ```bash
 # Get detailed error information in AI-friendly format
-curl "http://localhost:4362/errors/{error_id}/export"
+curl "http://localhost:${API_PORT}/errors/{error_id}/export"
 ```
 
 The export includes:
@@ -82,7 +85,7 @@ Both tests must pass. If tests fail, the fix is incomplete.
 ### Step 7: Mark as Resolved
 
 ```bash
-curl -X POST "http://localhost:4362/errors/{error_id}/resolve" \
+curl -X POST "http://localhost:${API_PORT}/errors/{error_id}/resolve" \
   -H "Content-Type: application/json" \
   -d '{"resolution": "Fixed by [description of fix]"}'
 ```
@@ -152,6 +155,35 @@ open → acknowledged → resolved
 
 - Use `acknowledge` when you start investigating but haven't fixed yet
 - Use `resolve` when the fix is complete and tests pass
+
+---
+
+## Error Classification
+
+Not all 500 errors require fixing. Classify errors before attempting fixes:
+
+### System Errors (Requires Fix)
+- Unexpected runtime failures
+- Database operation errors
+- File system errors
+- Logic bugs causing crashes
+- **Action**: Analyze root cause and fix
+
+### Generated/Test Errors (Do Not Fix)
+- Intentionally created by test endpoints (e.g., `POST /errors/test/create`)
+- Marked with identifiers like `errorName: "TestError"`
+- Suggested action mentions "for testing purposes"
+- Used for testing error tracking functionality
+- **Action**: Skip - expected behavior, not system defects
+
+### Identification Tips
+Look for these indicators:
+- `errorName`: "TestError" or similar test identifiers
+- `path`: `/errors/test/create` or other test endpoints
+- `suggestedAction`: Contains "testing purposes" or "test error"
+- `errorMessage`: Starts with "Test error"
+
+Always filter out generated errors before fixing to avoid wasting time on expected behavior.
 
 ---
 
@@ -307,3 +339,16 @@ When using AI tools or automation to fix errors:
 - [ ] Provide clear resolution description
 - [ ] Mark error as resolved via API
 - [ ] Verify error is filtered from open queries
+
+---
+
+## Project-Specific Implementation
+
+For the Reblock project's practical implementation including:
+- Specific API endpoints and authentication
+- Project test commands (`npm run test`, `npm run test:hurl`)
+- Error classification and filtering logic
+- Complete curl examples with variable substitution
+- Report format templates
+
+See [error-fix-assist.md](../prompts/error-fix-assist.md).

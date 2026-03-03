@@ -1,6 +1,77 @@
 # Error Fix Assist Prompt
 
+> This prompt implements a simplified version of the workflow defined in
+> [error-fix-workflow.rule.md](../rules/error-fix-workflow.rule.md).
+>
+> **Correspondence:**
+> - Step 1 (Query) = Workflow Step 2 (Query) + Step 3 (Analyze)
+> - Step 2 (Baseline) = Workflow Step 4 (Baseline Tests)
+> - Step 3 (Fix) = Workflow Step 5 (Fix)
+> - Step 4 (Verify) = Workflow Step 6 (Verify Fix)
+> - Step 5 (Resolve) = Workflow Step 7 (Mark Resolved)
+>
+> This prompt focuses on practical commands for this specific project.
+> For theoretical workflow details, see the rule document.
+
 Use this prompt when the user wants to fix a 500 error.
+
+## Configuration
+
+Before running commands, set your API endpoint:
+
+```bash
+# To find your port, check:
+# - .env file: PORT=xxxx
+# - deploy.config.mjs: env.PORT
+# - Or run: grep -E "PORT[:=]" .env deploy.config.mjs 2>/dev/null | head -5
+
+API_HOST="localhost"
+API_PORT="3000"  # Adjust to match your deployment
+API_URL="http://${API_HOST}:${API_PORT}"
+```
+
+> All commands below use `${API_URL}` which expands to your configured endpoint.
+
+## Quick CLI Alternative
+
+For convenience, use the provided scripts instead of manual curl:
+
+```bash
+# Fetch errors
+./scripts/get-errors.sh --days 7 --status open
+
+# Resolve error
+./scripts/resolve-error.sh --id <error_id> --resolution "Fixed by ..."
+```
+
+See [error-fix-workflow.rule.md](../rules/error-fix-workflow.rule.md) for full CLI options and documentation.
+
+## Error Classification
+
+Before fixing, classify errors per [error-fix-workflow.rule.md](../rules/error-fix-workflow.rule.md):
+
+### System Errors (Requires Fix)
+- Unexpected runtime errors
+- Database operation failures
+- File system errors
+- **Action**: Analyze and fix
+
+### Generated/Test Errors (Skip)
+- Created by `POST /errors/test/create`
+- Has `errorName: "TestError"`
+- Suggested action contains "for testing purposes"
+- **Action**: Skip - expected behavior
+
+### Identification Function
+```javascript
+function isTestError(error) {
+  const d = error.details || {};
+  return d.errorName === 'TestError' ||
+         d.path === '/errors/test/create' ||
+         (error.suggestedAction || '').includes('testing purposes') ||
+         (d.errorMessage || '').startsWith('Test error');
+}
+```
 
 ## Prompt Template
 
@@ -9,14 +80,24 @@ I need to fix a 500 error that occurred on the server.
 
 Please follow the Error Fix Workflow:
 
-1. First, query the error from the API:
+1. First, query and classify errors:
    ```
-   curl "http://localhost:4362/errors?days=7&status=open"
+   curl "${API_URL}/errors?days=7&status=open"
    ```
+   
+   **Filter out test errors** (do not fix these):
+   - `errorName: "TestError"`
+   - `path: "/errors/test/create"`
+   - `suggestedAction` containing "testing purposes"
+   
+   **Record statistics**:
+   - Total errors: X
+   - Generated/Test errors (skip): Y
+   - System errors (fix): Z
 
 2. Get the error details using the export endpoint:
    ```
-   curl "http://localhost:4362/errors/{error_id}/export"
+   curl "${API_URL}/errors/{error_id}/export"
    ```
 
 3. Run the existing tests to establish a baseline:
@@ -35,7 +116,7 @@ Please follow the Error Fix Workflow:
 
 6. Mark the error as resolved:
    ```
-   curl -X POST "http://localhost:4362/errors/{error_id}/resolve" \
+   curl -X POST "${API_URL}/errors/{error_id}/resolve" \
      -H "Content-Type: application/json" \
      -d '{"resolution": "Brief description of the fix"}'
    ```
@@ -51,7 +132,7 @@ Important:
 ### Step 1: Query Error
 
 ```bash
-curl "http://localhost:4362/errors?days=7&status=open"
+curl "${API_URL}/errors?days=7&status=open"
 ```
 
 Find the error ID from the response.
@@ -59,7 +140,7 @@ Find the error ID from the response.
 ### Step 2: Get Error Details
 
 ```bash
-curl "http://localhost:4362/errors/{error_id}/export"
+curl "${API_URL}/errors/{error_id}/export"
 ```
 
 Analyze:
@@ -96,7 +177,7 @@ Both tests must pass. If either fails, the fix is incomplete.
 ### Step 6: Mark Resolved
 
 ```bash
-curl -X POST "http://localhost:4362/errors/{error_id}/resolve" \
+curl -X POST "${API_URL}/errors/{error_id}/resolve" \
   -H "Content-Type: application/json" \
   -d '{"resolution": "Fixed by [description]"}'
 ```
@@ -129,10 +210,68 @@ npm run test:hurl: [PASS/FAIL]
 
 ### Resolution Command
 ```bash
-curl -X POST "http://localhost:4362/errors/{error_id}/resolve" \
+curl -X POST "${API_URL}/errors/{error_id}/resolve" \
   -H "Content-Type: application/json" \
   -d '{"resolution": "..."}'
 ```
+
+---
+
+## Report Format
+
+When reporting the fix, include:
+
+### Error Classification Summary
+
+| Category | Count | Action |
+|----------|-------|--------|
+| Total Found | X | - |
+| Generated/Test | Y | **Skip** - expected behavior |
+| System | Z | **Fix** - actual bugs |
+
+### Generated Errors (Not Fixed)
+
+Per [error-fix-workflow.rule.md](../rules/error-fix-workflow.rule.md), these test errors were skipped:
+- ID: xxx (TestError - /errors/test/create)
+- ID: xxx (TestError - /errors/test/create)
+...
+
+### System Errors Fixed
+
+#### Error {error_id}
+- **Error message**: ...
+- **Root cause**: ...
+- **Affected files**: ...
+
+**Code Changes**:
+```typescript
+// Before
+...
+
+// After
+...
+```
+
+### Test Results
+```
+npm run test: [PASS/FAIL]npm run test:hurl: [PASS/FAIL]
+```
+
+---
+
+## Implementation Checklist
+
+Per [error-fix-workflow.rule.md](../rules/error-fix-workflow.rule.md):
+
+- [ ] Run baseline tests (`npm run test && npm run test:hurl`)
+- [ ] Query and classify errors (filter test errors)
+- [ ] Analyze error details and stack trace
+- [ ] Identify root cause, not symptoms
+- [ ] Make minimal, targeted fixes
+- [ ] Run tests after fix - both must pass
+- [ ] Provide clear resolution description
+- [ ] Mark error as resolved
+- [ ] Verify error filtered from open queries
 
 ---
 
