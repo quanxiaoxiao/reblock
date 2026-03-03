@@ -431,6 +431,14 @@ router.openapi(
           },
         },
       },
+      500: {
+        description: 'Internal server error',
+        content: {
+          'application/json': {
+            schema: ErrorSchema,
+          },
+        },
+      },
     },
   }),
   async (c: Context) => {

@@ -172,4 +172,10 @@ if (env.MIGRATION_API_ENABLED) {
   console.log('🔧 Migration API enabled');
 }
 
+// Global error handler - catches ALL errors including OpenAPI route errors
+app.onError((err: Error, c: Context) => {
+  const { onErrorHandler } = require('./routes/middlewares/errorHandler');
+  return onErrorHandler(err, c);
+});
+
 export default app;
