@@ -2,504 +2,372 @@
 
 /**
  * Resource Analysis Report
- * 
- * Generates a comprehensive analysis report for a Resource including:
- * - Basic information and metadata
- * - Upload details (time, duration, client info)
- * - Block association and health checks
- * - Anomaly detection
- * - Recent activity logs
- * 
+ *
  * Usage:
  *   node scripts/resource-report.mjs --resource-id <id>
  *   node scripts/resource-report.mjs --resource-id <id> --json
  *   node scripts/resource-report.mjs --resource-id <id> --days 7
- * 
+ *
  * Options:
- *   --resource-id <id>     Resource ID to analyze (required)
- *   --json                Output as JSON
- *   --days <n>            Days of history to analyze (default: 30)
- *   --verbose             Show detailed information
- *   --help                Show this help
+ *   --resource-id <id>   Resource ID to analyze (required)
+ *   --json               Output as JSON
+ *   --days <n>           Days of history to analyze (default: 30)
+ *   --verbose            Show detailed information
+ *   --help               Show this help
  */
 
-import { readFileSync, statSync, existsSync } from 'fs';
+import { readFileSync, statSync, existsSync, createReadStream } from 'fs';
 import { resolve, join } from 'path';
+import { createHmac, createDecipheriv, createHash } from 'crypto';
+import { pipeline } from 'stream/promises';
 import mongoose from 'mongoose';
-import { createHmac, createDecipheriv } from 'crypto';
 
-// Load environment variables
+// ─── Environment ─────────────────────────────────────────────────────────────
+
 function loadEnv() {
   try {
     const envPath = resolve(process.cwd(), '.env');
-    const envContent = readFileSync(envPath, 'utf-8');
-    for (const line of envContent.split('\n')) {
-      const match = line.match(/^([^=#]+)=(.*)$/);
-      if (match) {
-        const key = match[1].trim();
-        const value = match[2].trim();
-        if (!process.env[key]) {
-          process.env[key] = value;
-        }
+    for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+      const m = line.match(/^([^=#]+)=(.*)$/);
+      if (m) {
+        const [, key, val] = m;
+        process.env[key.trim()] ??= val.trim();
       }
     }
   } catch {
-    // Ignore if .env doesn't exist
+    // .env 不存在时忽略
   }
 }
 
 loadEnv();
 
-// Configuration
-const CONFIG = {
-  MONGO_URI: '',
-  DAYS: 30,
-};
+// ─── Config ───────────────────────────────────────────────────────────────────
 
-function initializeConfig() {
-  const mongoHost = process.env.MONGO_HOSTNAME || 'localhost';
-  const mongoPort = process.env.MONGO_PORT || '27017';
-  const mongoDb = process.env.MONGO_DATABASE || 'reblock';
-  const mongoUser = process.env.MONGO_USERNAME;
-  const mongoPass = process.env.MONGO_PASSWORD;
-  
-  const auth = mongoUser && mongoPass ? `${mongoUser}:${mongoPass}@` : '';
-  const authSource = auth ? '?authSource=admin' : '';
-  CONFIG.MONGO_URI = `mongodb://${auth}${mongoHost}:${mongoPort}/${mongoDb}${authSource}`;
-  
-  // Get storage directory from env or use default
-  const blockDir = process.env.STORAGE_BLOCK_DIR || './storage/blocks';
-  CONFIG.BLOCKS_DIR = resolve(process.cwd(), blockDir);
-  
-  // Get encryption key for HMAC path calculation
-  CONFIG.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-}
+function buildConfig() {
+  const host   = process.env.MONGO_HOSTNAME || 'localhost';
+  const port   = process.env.MONGO_PORT     || '27017';
+  const db     = process.env.MONGO_DATABASE || 'reblock';
+  const user   = process.env.MONGO_USERNAME;
+  const pass   = process.env.MONGO_PASSWORD;
+  const auth   = user && pass ? `${user}:${pass}@` : '';
+  const qs     = auth ? '?authSource=admin' : '';
 
-initializeConfig();
-
-// Colors for terminal output
-const colors = {
-  reset: '\x1b[0m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  cyan: '\x1b[36m',
-  gray: '\x1b[90m',
-  bold: '\x1b[1m',
-};
-
-// Parse arguments
-function parseArgs() {
-  const args = process.argv.slice(2);
-  
-  const resourceIdIndex = args.indexOf('--resource-id');
-  const daysIndex = args.indexOf('--days');
-  
   return {
-    resourceId: resourceIdIndex >= 0 ? args[resourceIdIndex + 1] : null,
-    json: args.includes('--json'),
-    verbose: args.includes('--verbose'),
-    days: daysIndex >= 0 ? parseInt(args[daysIndex + 1]) || 30 : 30,
-    help: args.includes('--help') || args.includes('-h'),
+    MONGO_URI:      `mongodb://${auth}${host}:${port}/${db}${qs}`,
+    BLOCKS_DIR:     resolve(process.cwd(), process.env.STORAGE_BLOCK_DIR || './storage/blocks'),
+    ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+    SHA256_SIZE_LIMIT: 10 * 1024 * 1024, // 10 MB
   };
 }
 
-// Print helpers
-// eslint-disable-next-line no-unused-vars
-function log(message, color = colors.reset) {
-  console.log(`${color}${message}${colors.reset}`);
+const CONFIG = buildConfig();
+
+// ─── CLI ─────────────────────────────────────────────────────────────────────
+
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const get  = (flag) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : null; };
+
+  return {
+    resourceId: get('--resource-id'),
+    json:       args.includes('--json'),
+    verbose:    args.includes('--verbose'),
+    days:       parseInt(get('--days') ?? '30', 10) || 30,
+    help:       args.includes('--help') || args.includes('-h'),
+  };
 }
 
-function success(message) {
-  console.log(`${colors.green}✓${colors.reset} ${message}`);
-}
+// ─── Terminal helpers ─────────────────────────────────────────────────────────
 
-function error(message) {
-  console.log(`${colors.red}✗${colors.reset} ${message}`);
-}
+const c = {
+  reset:  '\x1b[0m',
+  red:    '\x1b[31m',
+  green:  '\x1b[32m',
+  yellow: '\x1b[33m',
+  cyan:   '\x1b[36m',
+  gray:   '\x1b[90m',
+  bold:   '\x1b[1m',
+};
 
-function warn(message) {
-  console.log(`${colors.yellow}⚠${colors.reset} ${message}`);
-}
-
-function info(message) {
-  console.log(`${colors.gray}  ${message}${colors.reset}`);
-}
+const ok   = (msg) => console.log(`${c.green}✓${c.reset} ${msg}`);
+const fail = (msg) => console.log(`${c.red}✗${c.reset} ${msg}`);
+const warn = (msg) => console.log(`${c.yellow}⚠${c.reset} ${msg}`);
+const info = (msg) => console.log(`${c.gray}  ${msg}${c.reset}`);
 
 function section(title) {
-  console.log(`\n${colors.cyan}${colors.bold}${title}${colors.reset}`);
-  console.log(`${colors.gray}${'━'.repeat(50)}${colors.reset}`);
+  console.log(`\n${c.cyan}${c.bold}${title}${c.reset}`);
+  console.log(`${c.gray}${'━'.repeat(50)}${c.reset}`);
 }
 
-// Connect to MongoDB
-async function connectDB() {
-  await mongoose.connect(CONFIG.MONGO_URI);
+// ─── Formatting ───────────────────────────────────────────────────────────────
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** i).toFixed(2)} ${units[i]}`;
 }
 
-async function disconnectDB() {
-  await mongoose.disconnect();
+const formatDate     = (ts) => new Date(ts).toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+const formatDuration = (ms) =>
+  ms < 1000 ? `${ms}ms` : ms < 60_000 ? `${(ms / 1000).toFixed(2)}s` : `${(ms / 60_000).toFixed(2)}m`;
+
+// ─── Storage helpers ──────────────────────────────────────────────────────────
+
+function getEncryptionKey() {
+  if (!CONFIG.ENCRYPTION_KEY) throw new Error('ENCRYPTION_KEY not configured');
+  return Buffer.from(CONFIG.ENCRYPTION_KEY, 'base64');
 }
 
-// Define schemas directly (avoid ES module import issues)
+function getStoragePath(sha256) {
+  const name    = createHmac('sha256', getEncryptionKey()).update(sha256).digest('hex');
+  const prefix1 = name.slice(0, 2);
+  const prefix2 = name.slice(2, 3);
+  return join(CONFIG.BLOCKS_DIR, prefix1, `${prefix2}${name}`);
+}
+
+function generateIV(objectId) {
+  const buf = Buffer.isBuffer(objectId) ? objectId : Buffer.from(objectId.toString(), 'hex');
+  return Buffer.concat([buf, Buffer.alloc(4)]);
+}
+
+async function computeSHA256(filePath, iv) {
+  const hash         = createHash('sha256');
+  const decryptStream = createDecipheriv('aes-256-ctr', getEncryptionKey(), iv);
+  await pipeline(createReadStream(filePath), decryptStream, hash);
+  return hash.digest('hex');
+}
+
+// ─── MongoDB ──────────────────────────────────────────────────────────────────
+
+const connectDB    = () => mongoose.connect(CONFIG.MONGO_URI);
+const disconnectDB = () => mongoose.disconnect();
+
 function loadModels() {
-  const resourceSchema = new mongoose.Schema({
-    block: { type: mongoose.Schema.Types.ObjectId, ref: 'Block' },
-    entry: { type: mongoose.Schema.Types.ObjectId, ref: 'Entry' },
-    mime: String,
-    category: String,
-    description: { type: String, default: '' },
-    name: { type: String, default: '' },
-    createdAt: { type: Number, default: Date.now },
-    updatedAt: { type: Number, default: Date.now },
+  const mk = (name, def) =>
+    mongoose.models[name] || mongoose.model(name, new mongoose.Schema(def));
+
+  const ObjectId = mongoose.Schema.Types.ObjectId;
+
+  const Resource = mk('Resource', {
+    block:          { type: ObjectId, ref: 'Block' },
+    entry:          { type: ObjectId, ref: 'Entry' },
+    mime:           String,
+    category:       String,
+    description:    { type: String, default: '' },
+    name:           { type: String, default: '' },
+    createdAt:      { type: Number, default: Date.now },
+    updatedAt:      { type: Number, default: Date.now },
     lastAccessedAt: { type: Number, default: Date.now },
-    isInvalid: { type: Boolean, default: false },
-    invalidatedAt: Number,
-    clientIp: String,
-    userAgent: String,
+    isInvalid:      { type: Boolean, default: false },
+    invalidatedAt:  Number,
+    clientIp:       String,
+    userAgent:      String,
     uploadDuration: Number,
   });
 
-  const blockSchema = new mongoose.Schema({
-    sha256: { type: String, required: true, unique: true },
-    size: { type: Number, required: true },
-    linkCount: { type: Number, default: 1 },
-    createdAt: { type: Number, default: Date.now },
-    updatedAt: { type: Number, default: Date.now },
-    isInvalid: { type: Boolean, default: false },
+  const Block = mk('Block', {
+    sha256:       { type: String, required: true, unique: true },
+    size:         { type: Number, required: true },
+    linkCount:    { type: Number, default: 1 },
+    createdAt:    { type: Number, default: Date.now },
+    updatedAt:    { type: Number, default: Date.now },
+    isInvalid:    { type: Boolean, default: false },
     invalidatedAt: Number,
   });
 
-  const entrySchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    alias: { type: String, unique: true, sparse: true },
-    order: { type: Number, default: 0 },
-    description: { type: String, default: '' },
-    isDefault: { type: Boolean, default: false },
-    uploadConfig: {
-      readOnly: Boolean,
-      maxFileSize: Number,
-      allowedMimeTypes: [String],
-    },
-    createdAt: { type: Number, default: Date.now },
-    updatedAt: { type: Number, default: Date.now },
-    isInvalid: { type: Boolean, default: false },
+  const Entry = mk('Entry', {
+    name:         { type: String, required: true },
+    alias:        { type: String, unique: true, sparse: true },
+    order:        { type: Number, default: 0 },
+    description:  { type: String, default: '' },
+    isDefault:    { type: Boolean, default: false },
+    uploadConfig: { readOnly: Boolean, maxFileSize: Number, allowedMimeTypes: [String] },
+    createdAt:    { type: Number, default: Date.now },
+    updatedAt:    { type: Number, default: Date.now },
+    isInvalid:    { type: Boolean, default: false },
     invalidatedAt: Number,
   });
 
-  const logEntrySchema = new mongoose.Schema({
-    timestamp: { type: Number, required: true },
-    level: { type: String, enum: ['CRITICAL', 'ERROR', 'WARNING', 'INFO'], required: true },
-    category: { type: String, required: true },
-    blockId: { type: mongoose.Schema.Types.ObjectId, ref: 'Block' },
-    resourceIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Resource' }],
-    entryIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Entry' }],
-    details: mongoose.Schema.Types.Mixed,
-    context: mongoose.Schema.Types.Mixed,
-    expiresAt: Date,
+  const LogEntry = mk('LogEntry', {
+    timestamp:   { type: Number, required: true },
+    level:       { type: String, enum: ['CRITICAL', 'ERROR', 'WARNING', 'INFO'], required: true },
+    category:    { type: String, required: true },
+    blockId:     { type: ObjectId, ref: 'Block' },
+    resourceIds: [{ type: ObjectId, ref: 'Resource' }],
+    entryIds:    [{ type: ObjectId, ref: 'Entry' }],
+    details:     mongoose.Schema.Types.Mixed,
+    context:     mongoose.Schema.Types.Mixed,
+    expiresAt:   Date,
   });
-
-  const Resource = mongoose.models.Resource || mongoose.model('Resource', resourceSchema);
-  const Block = mongoose.models.Block || mongoose.model('Block', blockSchema);
-  const Entry = mongoose.models.Entry || mongoose.model('Entry', entrySchema);
-  const LogEntry = mongoose.models.LogEntry || mongoose.model('LogEntry', logEntrySchema);
 
   return { Resource, Block, Entry, LogEntry };
 }
 
-// Generate storage name from sha256 using HMAC
-function generateStorageName(sha256) {
-  if (!CONFIG.ENCRYPTION_KEY) {
-    throw new Error('ENCRYPTION_KEY not configured');
+// ─── Anomaly builders ─────────────────────────────────────────────────────────
+
+function buildAnomalies(health, resource) {
+  const block     = resource.block;
+  const anomalies = [];
+
+  const add = (type, severity, description, details) =>
+    anomalies.push({ type, severity, description, details });
+
+  if (!health.blockExists) {
+    add('ORPHANED_RESOURCE', 'CRITICAL',
+      'Resource references non-existent block',
+      { blockId: block?._id });
   }
-  const key = Buffer.from(CONFIG.ENCRYPTION_KEY, 'base64');
-  return createHmac('sha256', key).update(sha256).digest('hex');
+
+  if (health.blockExists && !health.fileExists) {
+    add('MISSING_FILE', 'CRITICAL',
+      'Physical file missing from storage',
+      { expectedPath: getStoragePath(block.sha256) });
+  }
+
+  if (!health.linkCountMatch) {
+    add('LINKCOUNT_MISMATCH', 'WARNING',
+      `Block linkCount (${block.linkCount}) doesn't match actual references (${health.actualRefCount})`,
+      { expected: block.linkCount, actual: health.actualRefCount });
+  }
+
+  if (health.actualFileSize !== undefined && !health.sizeMatch) {
+    add('FILE_SIZE_MISMATCH', 'WARNING',
+      `File size mismatch: DB=${block.size}, Actual=${health.actualFileSize}`,
+      { dbSize: block.size, actualSize: health.actualFileSize });
+  }
+
+  if (health.sha256Match === false) {
+    add('SHA256_MISMATCH', 'CRITICAL',
+      'File SHA256 hash mismatch - file may be corrupted',
+      { dbSha256: block.sha256, actualSha256: health.actualSha256 });
+  }
+
+  if (!health.blockValid) {
+    add('INVALID_BLOCK', 'WARNING',
+      'Resource references a soft-deleted block',
+      { blockId: block._id });
+  }
+
+  if (!health.metadataConsistent) {
+    add('METADATA_INCONSISTENCY', 'WARNING',
+      'Block is marked invalid but still has references',
+      { linkCount: block.linkCount });
+  }
+
+  return anomalies;
 }
 
-// Get storage path for block using HMAC-based path calculation
-function getStoragePath(sha256) {
-  const storageName = generateStorageName(sha256);
-  const prefix1 = storageName.substring(0, 2);
-  const secondChar = storageName.substring(2, 3);
-  const relativePath = `${prefix1}/${secondChar}${storageName}`;
-  return join(CONFIG.BLOCKS_DIR, relativePath);
-}
+// ─── Core analysis ────────────────────────────────────────────────────────────
 
-// Generate IV from MongoDB ObjectId (12 bytes + 4 zero bytes padding = 16 bytes for AES)
-function generateIV(objectId) {
-  const objectIdBuffer = Buffer.isBuffer(objectId)
-    ? objectId
-    : Buffer.from(objectId.toString(), 'hex');
-  return Buffer.concat([objectIdBuffer, Buffer.from([0, 0, 0, 0])]);
-}
-
-// Format bytes
-function formatBytes(bytes) {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-// Format date
-function formatDate(timestamp) {
-  return new Date(timestamp).toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
-}
-
-// Format duration
-function formatDuration(ms) {
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(2)}s`;
-  return `${(ms / 60000).toFixed(2)}m`;
-}
-
-// Compute SHA256 of file (decrypts first, then hashes)
-async function computeSHA256(filePath, iv) {
-  const crypto = await import('crypto');
-  const fs = await import('fs');
-  const { pipeline } = await import('stream/promises');
-
-  return new Promise(async (resolve, reject) => {
-    try {
-      const hash = crypto.createHash('sha256');
-      const key = Buffer.from(CONFIG.ENCRYPTION_KEY, 'base64');
-
-      // Create decrypt stream (AES-256-CTR)
-      const decryptStream = createDecipheriv('aes-256-ctr', key, iv);
-
-      // Create file read stream
-      const fileStream = fs.createReadStream(filePath);
-
-      // Pipeline: file → decrypt → hash
-      await pipeline(fileStream, decryptStream, hash);
-      resolve(hash.digest('hex'));
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-
-// Main analysis function
-async function analyzeResource(resourceId, models, options) {
-  const { Resource, LogEntry } = models;
-  const { days } = options;
-  
-  const report = {
-    timestamp: Date.now(),
-    resourceId,
-    resource: null,
-    entry: null,
-    block: null,
-    health: {},
-    anomalies: [],
-    logs: [],
-    summary: {},
-  };
-  
-  // 1. Get resource
-  const resource = await Resource.findById(resourceId)
+async function analyzeResource(resourceId, { Resource, LogEntry }, { days }) {
+  const resource = await Resource
+    .findById(resourceId)
     .populate('block')
     .populate('entry', 'name alias isDefault')
     .lean();
-  
-  if (!resource) {
-    throw new Error(`Resource ${resourceId} not found`);
-  }
-  
-  report.resource = resource;
-  report.entry = resource.entry;
-  report.block = resource.block;
-  
-  // 2. Health checks
+
+  if (!resource) throw new Error(`Resource ${resourceId} not found`);
+
+  const block = resource.block;
+
+  // ── Health checks ──────────────────────────────────────────────────────────
   const health = {
-    resourceExists: true,
-    blockExists: !!resource.block,
-    fileExists: false,
-    linkCountMatch: false,
-    sizeMatch: false,
-    sha256Match: false,
-    blockValid: resource.block && !resource.block.isInvalid,
-    metadataConsistent: true,
+    resourceExists:      true,
+    blockExists:         !!block,
+    fileExists:          false,
+    linkCountMatch:      false,
+    sizeMatch:           false,
+    sha256Match:         false,
+    blockValid:          block && !block.isInvalid,
+    metadataConsistent:  true,
   };
-  
-  if (resource.block) {
-    const block = resource.block;
+
+  if (block) {
     const storagePath = getStoragePath(block.sha256);
-    
-    // Check physical file
     health.fileExists = existsSync(storagePath);
-    
-    // Check linkCount
-    const actualRefCount = await Resource.countDocuments({
-      block: block._id,
-      isInvalid: { $ne: true },
-    });
+
+    const actualRefCount = await Resource.countDocuments({ block: block._id, isInvalid: { $ne: true } });
     health.linkCountMatch = block.linkCount === actualRefCount;
     health.actualRefCount = actualRefCount;
-    
-    // Check file size
+
     if (health.fileExists) {
       try {
-        const stats = statSync(storagePath);
-        health.actualFileSize = stats.size;
-        health.sizeMatch = stats.size === block.size;
-        
-        // Check SHA256 (expensive, only do if file is small)
-        if (stats.size < 10 * 1024 * 1024) { // Only for files < 10MB
-          const iv = generateIV(block._id);
-          const actualSha256 = await computeSHA256(storagePath, iv);
-          health.actualSha256 = actualSha256;
-          health.sha256Match = actualSha256 === block.sha256;
+        const { size } = statSync(storagePath);
+        health.actualFileSize = size;
+        health.sizeMatch      = size === block.size;
+
+        if (size < CONFIG.SHA256_SIZE_LIMIT) {
+          const actual = await computeSHA256(storagePath, generateIV(block._id));
+          health.actualSha256  = actual;
+          health.sha256Match   = actual === block.sha256;
         } else {
-          health.sha256Match = null; // Skipped for large files
+          health.sha256Match = null; // skipped for large files
         }
       } catch (err) {
         health.fileReadError = err.message;
       }
     }
-    
-    // Check metadata consistency
+
     if (block.isInvalid && block.linkCount > 0) {
       health.metadataConsistent = false;
     }
   }
-  
-  report.health = health;
-  
-  // 3. Detect anomalies
-  const anomalies = [];
-  
-  if (!health.blockExists) {
-    anomalies.push({
-      type: 'ORPHANED_RESOURCE',
-      severity: 'CRITICAL',
-      description: 'Resource references non-existent block',
-      details: { blockId: resource.block?._id },
-    });
-  }
-  
-  if (health.blockExists && !health.fileExists) {
-    anomalies.push({
-      type: 'MISSING_FILE',
-      severity: 'CRITICAL',
-      description: 'Physical file missing from storage',
-      details: { expectedPath: getStoragePath(resource.block.sha256) },
-    });
-  }
-  
-  if (!health.linkCountMatch) {
-    anomalies.push({
-      type: 'LINKCOUNT_MISMATCH',
-      severity: 'WARNING',
-      description: `Block linkCount (${resource.block.linkCount}) doesn't match actual references (${health.actualRefCount})`,
-      details: {
-        expected: resource.block.linkCount,
-        actual: health.actualRefCount,
-      },
-    });
-  }
-  
-  if (health.actualFileSize && !health.sizeMatch) {
-    anomalies.push({
-      type: 'FILE_SIZE_MISMATCH',
-      severity: 'WARNING',
-      description: `File size mismatch: DB=${resource.block.size}, Actual=${health.actualFileSize}`,
-      details: {
-        dbSize: resource.block.size,
-        actualSize: health.actualFileSize,
-      },
-    });
-  }
-  
-  if (health.sha256Match === false) {
-    anomalies.push({
-      type: 'SHA256_MISMATCH',
-      severity: 'CRITICAL',
-      description: 'File SHA256 hash mismatch - file may be corrupted',
-      details: {
-        dbSha256: resource.block.sha256,
-        actualSha256: health.actualSha256,
-      },
-    });
-  }
-  
-  if (!health.blockValid) {
-    anomalies.push({
-      type: 'INVALID_BLOCK',
-      severity: 'WARNING',
-      description: 'Resource references a soft-deleted block',
-      details: { blockId: resource.block._id },
-    });
-  }
-  
-  if (!health.metadataConsistent) {
-    anomalies.push({
-      type: 'METADATA_INCONSISTENCY',
-      severity: 'WARNING',
-      description: 'Block is marked invalid but still has references',
-      details: { linkCount: resource.block.linkCount },
-    });
-  }
-  
-  report.anomalies = anomalies;
-  
-  // 4. Query logs
-  const since = Date.now() - (days * 24 * 60 * 60 * 1000);
-  
-  const logs = await LogEntry.find({
+
+  // ── Anomalies ──────────────────────────────────────────────────────────────
+  const anomalies = buildAnomalies(health, resource);
+
+  // ── Logs ───────────────────────────────────────────────────────────────────
+  const since = Date.now() - days * 24 * 60 * 60 * 1000;
+  const logs  = await LogEntry.find({
     $or: [
       { resourceIds: new mongoose.Types.ObjectId(resourceId) },
-      { blockId: resource.block?._id },
+      { blockId: block?._id },
     ],
     timestamp: { $gte: since },
-  })
-    .sort({ timestamp: -1 })
-    .limit(50)
-    .lean();
-  
-  report.logs = logs;
-  
-  // 5. Generate summary
+  }).sort({ timestamp: -1 }).limit(50).lean();
+
+  // ── Summary ────────────────────────────────────────────────────────────────
   const criticalCount = anomalies.filter(a => a.severity === 'CRITICAL').length;
-  const warningCount = anomalies.filter(a => a.severity === 'WARNING').length;
-  
-  let healthScore = 100;
-  healthScore -= criticalCount * 30;
-  healthScore -= warningCount * 10;
-  healthScore = Math.max(0, healthScore);
-  
-  report.summary = {
-    totalAnomalies: anomalies.length,
-    criticalCount,
-    warningCount,
-    healthScore,
-    status: criticalCount > 0 ? 'CRITICAL' : warningCount > 0 ? 'WARNING' : 'HEALTHY',
-    logsFound: logs.length,
-    analysisDate: new Date().toISOString(),
-    daysAnalyzed: days,
+  const warningCount  = anomalies.filter(a => a.severity === 'WARNING').length;
+  const healthScore   = Math.max(0, 100 - criticalCount * 30 - warningCount * 10);
+
+  return {
+    timestamp:  Date.now(),
+    resourceId,
+    resource,
+    entry:      resource.entry,
+    block,
+    health,
+    anomalies,
+    logs,
+    summary: {
+      totalAnomalies: anomalies.length,
+      criticalCount,
+      warningCount,
+      healthScore,
+      status:       criticalCount > 0 ? 'CRITICAL' : warningCount > 0 ? 'WARNING' : 'HEALTHY',
+      logsFound:    logs.length,
+      analysisDate: new Date().toISOString(),
+      daysAnalyzed: days,
+    },
   };
-  
-  return report;
 }
 
-// Print text report
-function printTextReport(report) {
-  const { resource, entry, block, health, anomalies, logs, summary } = report;
-  
-  console.log(`\n${colors.cyan}${colors.bold}📊 Resource Analysis Report${colors.reset}`);
-  console.log(`${colors.gray}${'━'.repeat(50)}${colors.reset}\n`);
-  
-  // Resource Information
+// ─── Text reporter ────────────────────────────────────────────────────────────
+
+function printTextReport({ resource, entry, block, health, anomalies, logs, summary }) {
+  console.log(`\n${c.cyan}${c.bold}📊 Resource Analysis Report${c.reset}`);
+  console.log(`${c.gray}${'━'.repeat(50)}${c.reset}\n`);
+
   section('🔍 Resource Information');
   info(`ID:            ${resource._id}`);
   info(`Name:          ${resource.name || '(empty)'}`);
   info(`MIME Type:     ${resource.mime || '(unknown)'}`);
   info(`Category:      ${resource.category || '(none)'}`);
-  info(`Status:        ${resource.isInvalid ? colors.red + '✗ Deleted' : colors.green + '✓ Active'}`);
+  info(`Status:        ${resource.isInvalid ? c.red + '✗ Deleted' : c.green + '✓ Active'}`);
   info(`Description:   ${resource.description || '(none)'}`);
-  
-  // Entry Information
+
   if (entry) {
     section('📁 Entry Information');
     info(`ID:            ${entry._id}`);
@@ -507,122 +375,82 @@ function printTextReport(report) {
     info(`Alias:         ${entry.alias}`);
     info(`Is Default:    ${entry.isDefault ? 'Yes' : 'No'}`);
   }
-  
-  // Upload Information
+
   section('⏱️  Upload Information');
   info(`Upload Time:   ${formatDate(resource.createdAt)}`);
   if (resource.uploadDuration) {
     info(`Duration:      ${formatDuration(resource.uploadDuration)}`);
-    const speed = resource.block ? (resource.block.size / (resource.uploadDuration / 1000)) : 0;
+    const speed = block ? block.size / (resource.uploadDuration / 1000) : 0;
     info(`Transfer Speed: ${formatBytes(speed)}/s`);
   }
-  if (resource.clientIp) {
-    info(`Client IP:     ${resource.clientIp}`);
-  }
+  if (resource.clientIp) info(`Client IP:     ${resource.clientIp}`);
   if (resource.userAgent) {
-    info(`User Agent:    ${resource.userAgent.substring(0, 60)}${resource.userAgent.length > 60 ? '...' : ''}`);
+    const ua = resource.userAgent;
+    info(`User Agent:    ${ua.length > 60 ? ua.slice(0, 60) + '...' : ua}`);
   }
-  
-  // Block Association
+
   if (block) {
     section('📦 Block Association');
     info(`Block ID:      ${block._id}`);
-    info(`SHA256:        ${block.sha256.substring(0, 32)}...`);
+    info(`SHA256:        ${block.sha256.slice(0, 32)}...`);
     info(`Size:          ${formatBytes(block.size)} (${block.size} bytes)`);
     info(`Link Count:    ${block.linkCount}`);
     info(`Created:       ${formatDate(block.createdAt)}`);
     info(`Storage Path:  ${getStoragePath(block.sha256)}`);
   }
-  
-  // Health Check Results
+
   section('⚠️  Health Check Results');
-  
-  if (health.resourceExists) {
-    success('Resource exists in database');
-  } else {
-    error('Resource not found');
-  }
-  
-  if (health.blockExists) {
-    success('Block association valid');
-  } else {
-    error('Block association broken - resource is orphaned');
-  }
-  
-  if (health.fileExists) {
-    success('Physical file exists');
-  } else {
-    error('Physical file missing');
-  }
-  
-  if (health.linkCountMatch) {
-    success(`Link count correct (${block.linkCount}/${health.actualRefCount})`);
-  } else {
-    warn(`Link count mismatch: expected ${block.linkCount}, actual ${health.actualRefCount}`);
-  }
-  
+  health.resourceExists ? ok('Resource exists in database') : fail('Resource not found');
+  health.blockExists    ? ok('Block association valid')     : fail('Block association broken - resource is orphaned');
+  health.fileExists     ? ok('Physical file exists')        : fail('Physical file missing');
+
+  health.linkCountMatch
+    ? ok(`Link count correct (${block.linkCount}/${health.actualRefCount})`)
+    : warn(`Link count mismatch: expected ${block.linkCount}, actual ${health.actualRefCount}`);
+
   if (health.sizeMatch) {
-    success('File size matches');
-  } else if (health.actualFileSize) {
+    ok('File size matches');
+  } else if (health.actualFileSize !== undefined) {
     warn(`File size mismatch: DB=${formatBytes(block.size)}, File=${formatBytes(health.actualFileSize)}`);
   }
-  
-  if (health.sha256Match === true) {
-    success('SHA256 hash verified');
-  } else if (health.sha256Match === false) {
-    error('SHA256 hash mismatch - file corrupted!');
-  } else {
-    info('SHA256 check skipped (large file)');
-  }
-  
-  if (health.blockValid) {
-    success('Block is valid (not deleted)');
-  } else {
-    warn('Block is soft-deleted');
-  }
-  
-  // Anomalies
+
+  if      (health.sha256Match === true)  ok('SHA256 hash verified');
+  else if (health.sha256Match === false) fail('SHA256 hash mismatch - file corrupted!');
+  else                                   info('SHA256 check skipped (large file)');
+
+  health.blockValid ? ok('Block is valid (not deleted)') : warn('Block is soft-deleted');
+
   section('🔍 Anomaly Detection');
   if (anomalies.length === 0) {
-    console.log(`${colors.green}${colors.bold}  ✓ No anomalies detected${colors.reset}`);
+    console.log(`${c.green}${c.bold}  ✓ No anomalies detected${c.reset}`);
   } else {
-    console.log(`${colors.yellow}  Status: ${summary.criticalCount > 0 ? colors.red + 'CRITICAL' : colors.yellow + 'WARNING'} (${anomalies.length} issues)${colors.reset}\n`);
-    
-    anomalies.forEach((anomaly, _i) => {
-      const color = anomaly.severity === 'CRITICAL' ? colors.red : colors.yellow;
-      console.log(`  ${color}[${anomaly.severity}]${colors.reset} ${anomaly.type}`);
-      console.log(`    ${colors.gray}${anomaly.description}${colors.reset}`);
-      if (anomaly.details) {
-        Object.entries(anomaly.details).forEach(([key, value]) => {
-          console.log(`    ${colors.gray}  ${key}: ${value}${colors.reset}`);
-        });
+    const badge = summary.criticalCount > 0 ? c.red + 'CRITICAL' : c.yellow + 'WARNING';
+    console.log(`${c.yellow}  Status: ${badge}${c.reset} (${anomalies.length} issues)\n`);
+    for (const a of anomalies) {
+      const col = a.severity === 'CRITICAL' ? c.red : c.yellow;
+      console.log(`  ${col}[${a.severity}]${c.reset} ${a.type}`);
+      console.log(`    ${c.gray}${a.description}${c.reset}`);
+      for (const [k, v] of Object.entries(a.details ?? {})) {
+        console.log(`    ${c.gray}  ${k}: ${v}${c.reset}`);
       }
       console.log();
-    });
+    }
   }
-  
-  // Recent Logs
-  section(`📜 Recent Activity (Last ${report.summary.daysAnalyzed} Days)`);
+
+  section(`📜 Recent Activity (Last ${summary.daysAnalyzed} Days)`);
   if (logs.length === 0) {
     info('No logs found for this resource');
   } else {
-    logs.slice(0, 10).forEach(log => {
-      const date = new Date(log.timestamp).toISOString().substring(0, 19);
+    for (const log of logs.slice(0, 10)) {
+      const date  = new Date(log.timestamp).toISOString().slice(0, 19);
       const level = log.level || 'INFO';
-      const color = level === 'CRITICAL' || level === 'ERROR' ? colors.red : 
-                    level === 'WARNING' ? colors.yellow : colors.gray;
-      console.log(`  ${colors.gray}[${date}]${colors.reset} ${color}[${level}]${colors.reset} ${log.category}`);
-      if (log.details?.reason) {
-        console.log(`    ${colors.gray}${log.details.reason}${colors.reset}`);
-      }
-    });
-    
-    if (logs.length > 10) {
-      info(`... and ${logs.length - 10} more entries`);
+      const col   = ['CRITICAL', 'ERROR'].includes(level) ? c.red : level === 'WARNING' ? c.yellow : c.gray;
+      console.log(`  ${c.gray}[${date}]${c.reset} ${col}[${level}]${c.reset} ${log.category}`);
+      if (log.details?.reason) console.log(`    ${c.gray}${log.details.reason}${c.reset}`);
     }
+    if (logs.length > 10) info(`... and ${logs.length - 10} more entries`);
   }
-  
-  // Statistics
+
   section('📈 Statistics');
   info(`Total Anomalies:   ${summary.totalAnomalies}`);
   info(`Critical Issues:   ${summary.criticalCount}`);
@@ -630,68 +458,66 @@ function printTextReport(report) {
   info(`Health Score:      ${summary.healthScore}/100`);
   info(`Status:            ${summary.status}`);
   info(`Logs Found:        ${summary.logsFound}`);
-  
-  console.log(`\n${colors.gray}Report generated at: ${new Date().toISOString()}${colors.reset}\n`);
+
+  console.log(`\n${c.gray}Report generated at: ${new Date().toISOString()}${c.reset}\n`);
 }
 
-// Main function
-async function main() {
-  const args = parseArgs();
-  
-  if (args.help) {
-    console.log(`
-${colors.cyan}Resource Analysis Report${colors.reset}
+// ─── Help ─────────────────────────────────────────────────────────────────────
+
+const HELP = `
+${c.cyan}Resource Analysis Report${c.reset}
 
 Usage:
   node scripts/resource-report.mjs --resource-id <id> [options]
 
 Options:
-  --resource-id <id>     Resource ID to analyze (required)
-  --json                Output as JSON
-  --days <n>            Days of history to analyze (default: 30)
-  --verbose             Show detailed information
-  --help                Show this help
+  --resource-id <id>   Resource ID to analyze (required)
+  --json               Output as JSON
+  --days <n>           Days of history to analyze (default: 30)
+  --verbose            Show detailed information
+  --help               Show this help
 
 Examples:
   node scripts/resource-report.mjs --resource-id abc123
   node scripts/resource-report.mjs --resource-id abc123 --json
   node scripts/resource-report.mjs --resource-id abc123 --days 7
-`);
-    process.exit(0);
-  }
-  
+`;
+
+// ─── Entry point ──────────────────────────────────────────────────────────────
+
+async function main() {
+  const args = parseArgs();
+
+  if (args.help) { console.log(HELP); process.exit(0); }
+
   if (!args.resourceId) {
-    error('Resource ID is required. Use --resource-id <id>');
+    fail('Resource ID is required. Use --resource-id <id>');
     process.exit(1);
   }
-  
-  // Only print headers in text mode
+
   if (!args.json) {
-    console.log(`${colors.cyan}${colors.bold}📊 Resource Analysis Report${colors.reset}`);
-    console.log(`${colors.gray}${'━'.repeat(50)}${colors.reset}\n`);
+    console.log(`${c.cyan}${c.bold}📊 Resource Analysis Report${c.reset}`);
+    console.log(`${c.gray}${'━'.repeat(50)}${c.reset}\n`);
     info(`Analyzing Resource: ${args.resourceId}`);
     info(`History Range: Last ${args.days} days\n`);
   }
-  
+
   await connectDB();
   const models = loadModels();
-  
+
   try {
     const report = await analyzeResource(args.resourceId, models, { days: args.days });
-    
+
     if (args.json) {
       console.log(JSON.stringify(report, null, 2));
     } else {
       printTextReport(report);
     }
-    
-    // Exit code based on health
-    const exitCode = report.summary.criticalCount > 0 ? 1 : 
-                     report.summary.warningCount > 0 ? 2 : 0;
-    process.exit(exitCode);
-    
+
+    process.exit(report.summary.criticalCount > 0 ? 1 : report.summary.warningCount > 0 ? 2 : 0);
+
   } catch (err) {
-    error(`Error: ${err.message}`);
+    fail(`Error: ${err.message}`);
     console.error(err);
     process.exit(3);
   } finally {
@@ -700,6 +526,6 @@ Examples:
 }
 
 main().catch(err => {
-  console.error(`${colors.red}Fatal error: ${err.message}${colors.reset}`);
+  console.error(`${c.red}Fatal error: ${err.message}${c.reset}`);
   process.exit(1);
 });

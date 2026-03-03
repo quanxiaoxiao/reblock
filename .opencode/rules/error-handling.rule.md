@@ -49,18 +49,19 @@ class DownloadError extends Error {
 
 ## HTTP Status Codes
 
-| Status Code | Usage                          | Description                          |
-|-------------|--------------------------------|--------------------------------------|
-| 200         | Success                        | GET/PUT/DELETE successful            |
-| 201         | Created                        | POST resource created                |
-| 400         | Client Error                   | Validation error, bad request         |
-| 403         | Forbidden                      | Read-only, access denied             |
-| 404         | Not Found                      | Resource not found                   |
-| 409         | Conflict                       | Duplicate alias, constraint violation|
-| 413         | Payload Too Large              | File too large                       |
-| 415         | Unsupported Media Type         | Invalid MIME type                    |
-| 416         | Range Not Satisfiable          | Invalid byte range for download      |
-| 500         | Server Error                   | Internal error                       |
+| Status Code | Usage                          | Description                                           |
+|-------------|--------------------------------|-------------------------------------------------------|
+| 200         | Success                        | GET/PUT successful                                    |
+| 201         | Created                        | POST resource created                                 |
+| 204         | No Content                     | DELETE successful                                     |
+| 206         | Partial Content                | Range request successful (download)                   |
+| 400         | Client Error                   | Validation error, bad request (includes file size, MIME type) |
+| 401         | Unauthorized                   | Invalid or missing authentication token               |
+| 403         | Forbidden                      | Read-only, access denied                              |
+| 404         | Not Found                      | Resource not found                                    |
+| 409         | Conflict                       | Duplicate alias, constraint violation                 |
+| 416         | Range Not Satisfiable          | Invalid byte range for download                       |
+| 500         | Server Error                   | Internal error                                        |
 
 ---
 
@@ -102,9 +103,10 @@ interface ValidationErrorResponse {
 | RANGE_INVALID       | 416         | Invalid byte range request               |
 | ALREADY_EXISTS      | 409         | Resource already exists (alias, etc.)    |
 | CONSTRAINT_VIOLATION| 409         | Database constraint violated             |
-| FILE_TOO_LARGE      | 413         | File exceeds max size                   |
-| INVALID_MIME_TYPE   | 415         | MIME type not allowed                   |
+| FILE_TOO_LARGE      | 400         | File exceeds max size (returns 400)     |
+| INVALID_MIME_TYPE   | 400         | MIME type not allowed (returns 400)     |
 | READ_ONLY           | 403         | Cannot modify read-only resource         |
+| UNAUTHORIZED        | 401         | Invalid or missing authentication token  |
 
 ---
 

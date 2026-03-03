@@ -249,7 +249,7 @@ DELETE /entries/:id
 |-----------|--------|----------|------------------|
 | id        | string | Yes      | Entry ObjectId   |
 
-**Response (200):** Deleted entry object (with `isInvalid: true`)
+**Response (204):** No Content - Entry successfully soft-deleted
 
 **Cascade Behavior:**
 
@@ -400,7 +400,7 @@ DELETE /resources/:id
 |-----------|--------|----------|-------------------|
 | id        | string | Yes      | Resource ObjectId |
 
-**Response (200):** Deleted resource object
+**Response (204):** No Content - Resource successfully soft-deleted
 
 **Cascade Behavior:**
 
@@ -441,11 +441,11 @@ GET /resources/:id/download
 |---------|----------|--------------------------------|
 | Range   | No       | HTTP Range request (bytes=n-m) |
 
-**Response (200):**
+**Response:**
 
-- **Full content:** `200 OK`, binary body, `Content-Length: <size>`
-- **Partial content:** `206 Partial Content`, partial binary, `Content-Range: bytes start-end/size`
-- **Inline streaming:** `200 OK`, stream with appropriate `Content-Type`
+- **200 OK:** Full content, binary body, `Content-Length: <size>`
+- **206 Partial Content:** Range request successful, partial binary, `Content-Range: bytes start-end/size`
+- **200 OK (inline):** Streaming with appropriate `Content-Type` for video/audio
 
 **Response Headers:**
 
@@ -511,12 +511,10 @@ POST /upload
 
 **Errors:**
 
-| Status | Description                    |
-|--------|-------------------------------|
-| 400    | Validation error (no file)    |
-| 413    | File too large                |
-| 415    | Unsupported media type        |
-| 500    | Internal server error         |
+| Status | Description                                          |
+|--------|------------------------------------------------------|
+| 400    | Validation error (includes file size, MIME type)     |
+| 500    | Internal server error                                |
 
 ---
 
@@ -550,14 +548,12 @@ POST /upload/:alias
 
 **Errors:**
 
-| Status | Description                    |
-|--------|-------------------------------|
-| 400    | Validation error              |
-| 403    | Entry is read-only            |
-| 404    | Entry not found               |
-| 413    | File too large                |
-| 415    | Unsupported media type        |
-| 500    | Internal server error         |
+| Status | Description                                          |
+|--------|------------------------------------------------------|
+| 400    | Validation error (includes file size, MIME type)     |
+| 403    | Entry is read-only                                   |
+| 404    | Entry not found                                      |
+| 500    | Internal server error                                |
 
 ---
 
@@ -691,6 +687,156 @@ Currently **NOT implemented**. Future versions may include rate limiting.
 Currently **NOT implemented**. The service is designed for internal use.
 
 For production deployment, implement authentication middleware (OAuth2, API keys, etc.).
+
+---
+
+## Error API
+
+Runtime error tracking and management endpoints.
+
+### Authentication
+
+All endpoints require `x-errors-token` header when `ERRORS_API_TOKEN` is configured.
+
+**401 Unauthorized:** Returned when token is missing or invalid.
+
+---
+
+### List Errors
+
+```
+GET /errors
+```
+
+List runtime errors with pagination and filtering.
+
+**Query Parameters:**
+
+| Parameter | Type    | Required | Description                                    |
+|-----------|---------|----------|------------------------------------------------|
+| status    | string  | No       | Filter by status: 'open', 'acknowledged', 'resolved' |
+| category  | string  | No       | Error category filter                          |
+| level     | string  | No       | Error level: 'CRITICAL', 'ERROR', 'WARNING', 'INFO' |
+| limit     | number  | No       | Items per page (default: 20)                   |
+| offset    | number  | No       | 0-based pagination offset                      |
+
+**Response (200):**
+
+```typescript
+{
+  items: LogEntry[];
+  total: number;
+  limit?: number;
+  offset?: number;
+}
+```
+
+---
+
+### Get Error Detail
+
+```
+GET /errors/:id
+```
+
+Get detailed information about a specific error.
+
+**Path Parameters:**
+
+| Parameter | Type   | Required | Description       |
+|-----------|--------|----------|-------------------|
+| id        | string | Yes      | Error log entry ID |
+
+**Response (200):** LogEntry detail
+
+**Response (404):** Error not found
+
+---
+
+### Export Error
+
+```
+GET /errors/:id/export
+```
+
+Export error data for external analysis.
+
+**Path Parameters:**
+
+| Parameter | Type   | Required | Description       |
+|-----------|--------|----------|-------------------|
+| id        | string | Yes      | Error log entry ID |
+
+**Response (200):** Exported error data
+
+**Response (404):** Error not found
+
+---
+
+### Acknowledge Error
+
+```
+POST /errors/:id/acknowledge
+```
+
+Mark error as acknowledged (under investigation).
+
+**Path Parameters:**
+
+| Parameter | Type   | Required | Description       |
+|-----------|--------|----------|-------------------|
+| id        | string | Yes      | Error log entry ID |
+
+**Request Body:**
+
+| Field | Type   | Required | Description                |
+|-------|--------|----------|----------------------------|
+| note  | string | No       | Optional acknowledgment note |
+
+**Response (200):** Updated LogEntry
+
+**Response (404):** Error not found
+
+---
+
+### Resolve Error
+
+```
+POST /errors/:id/resolve
+```
+
+Mark error as resolved.
+
+**Path Parameters:**
+
+| Parameter | Type   | Required | Description       |
+|-----------|--------|----------|-------------------|
+| id        | string | Yes      | Error log entry ID |
+
+**Request Body:**
+
+| Field      | Type   | Required | Description              |
+|------------|--------|----------|--------------------------|
+| resolution | string | Yes      | Description of resolution |
+| resolvedBy | string | No       | User/system who resolved  |
+
+**Response (200):** Updated LogEntry
+
+**Response (404):** Error not found
+
+---
+
+### Create Test Error
+
+```
+POST /errors/test/create
+```
+
+Create a test error for testing error handling (development only).
+
+**Response (201):** Test error created successfully
+
+**Response (403):** Forbidden in production environment
 
 ---
 
