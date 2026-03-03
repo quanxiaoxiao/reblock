@@ -1,31 +1,31 @@
-# Opencode 示例与文档规范标准
+# Opencode Examples and Documentation Specification Guidelines
 
-## 概述
+## Overview
 
-本文档定义了 Reblock 项目中所有规范文档的编写标准，旨在确保文档的一致性、可读性和通用性。所有 `.opencode/rules/*.rule.md` 文件都应该遵循这些规范。
+This document defines the writing standards for all specification documents in the Reblock project, aiming to ensure consistency, readability, and universality. All `.opencode/rules/*.rule.md` files should follow these specifications.
 
-## 1. 通用文档结构标准
+## 1. General Documentation Structure Standards
 
-### 1.1 基本文档模板
-每个规则文档应包含以下部分：
-- 标题 (# Rule Name)
-- 概述 (Brief explanation of what this rule defines)
-- 核心内容区域 (使用标准格式)
-- 实现检查列表 (Implementation checklist section)
+### 1.1 Basic Document Template
+Each rule document should contain the following sections:
+- Title (# Rule Name)
+- Overview (Brief explanation of what this rule defines)
+- Core Content Area (using standard format)
+- Implementation Checklist (Implementation checklist section)
 
-### 1.2 内容组织原则
-- 按逻辑主题将内容分解为清晰的小节
-- 每个部分标题后包含必要的解释说明
-- 用横线 (---) 分隔关键概念区域
+### 1.2 Content Organization Principles
+- Organize content into logical topics with clear subsections
+- Include necessary explanatory information after each section header
+- Use dashes (---) to separate key concept areas
 
-## 2. 代码示例标准
+## 2. Code Example Standards
 
-### 2.1 推荐使用场景
+### 2.1 Recommended Usage Scenarios
 
-#### 2.1.1 HTTP API 示例（推荐：使用 curl）
-API 请求示例应始终使用 curl 命令而非特定编程语言的 HTTP 库：
+#### 2.1.1 HTTP API Examples (Recommended: Use curl)
+API request examples should always use curl commands rather than HTTP libs from specific programming languages:
 
-✅ **推荐格式**：
+✅ **Recommended Format**：
 ```bash
 curl -X POST "http://localhost:3000/entries" \
   -H "Content-Type: application/json" \
@@ -34,7 +34,7 @@ curl -X POST "http://localhost:3000/entries" \
   }'
 ```
 
-❌ **不推荐格式**：
+❌ **Not Recommended Format**：
 ```javascript
 // JavaScript fetch
 fetch('/entries', {
@@ -43,15 +43,15 @@ fetch('/entries', {
   body: JSON.stringify({...})
 })
 
-// 或 axios
+// Or axios
 axios.post('/entries', {...})
 ```
 
-#### 2.1.2 通用数据结构示例（推荐：JSON 结构）
+#### 2.1.2 General Data Structure Examples (Recommended: JSON Structure)
 
-使用纯 JSON 语法定义数据结构，避免指定实现语言：
+Use pure JSON syntax to define data structures, avoiding specifying implementation languages:
 
-✅ **推荐格式**：
+✅ **Recommended Format**：
 ```json
 {
   "status": "resolved",
@@ -61,9 +61,9 @@ axios.post('/entries', {...})
 }
 ```
 
-❌ **不推荐格式**：
+❌ **Not Recommended Format**：
 ```javascript
-// JavaScript 对象字面量
+// JavaScript object literal
 {
   status: 'resolved',
   changedAt: 1772241200000,
@@ -72,11 +72,11 @@ axios.post('/entries', {...})
 }
 ```
 
-#### 2.1.3 伪代码/算法示例（推荐：通用编程概念）
+#### 2.1.3 Pseudocode/Algorithm Examples (Recommended: General Programming Concepts)
 
-使用与特定语言无关的伪代码：
+Use pseudocode that is not tied to specific languages：
 
-✅ **推荐格式**：
+✅ **Recommended Format**：
 ```
 CLIENT PROCEDURE uploadFile(alias, file):
     INPUT: alias (string), file (binary/object)
@@ -96,25 +96,25 @@ CLIENT PROCEDURE uploadFile(alias, file):
 END PROCEDURE
 ```
 
-❌ **不推荐格式**：
+❌ **Not Recommended Format**：
 ```
-async function uploadFile(alias, file):  # JavaScript 风格
+async function uploadFile(alias, file):  # JavaScript style
     response = await POST(...)
 
-# 或
-func uploadFile(alias string, file []byte)  # Go 风格
+# Or
+func uploadFile(alias string, file []byte)  # Go style
 ```
 
-### 2.2 不应该使用的语法
+### 2.2 Syntax That Should Not Be Used
 
-- 避免任何特定编程语言语法，如 `async/await`, `Promise`, `->`, `=>`, `:` (对象声明), `.` (方法调用)
-- 避免具体类型的声明，如 `let`, `const`, `var`, `int`, `string`
-- 避免包含具体库/框架名称或特定包导入语句
+- Avoid any specific programming language syntax, such as `async/await`, `Promise`, `->`, `=>`, `:` (object declaration), `.` (method calls)
+- Avoid specific type declarations, such as `let`, `const`, `var`, `int`, `string`
+- Avoid including specific library/framework names or specific package import statements
 
-## 3. API 请求示例标准（CURL 优先）
+## 3. API Request Example Standards (CURL Preferred)
 
-### 3.1 HTTP 请求/响应示例格式
-提供完整的请求/响应示例，按如下格式组织：
+### 3.1 HTTP Request/Response Example Format
+Provide complete request/response examples, organized as follows:
 
 ```
 POST /entries
@@ -131,25 +131,25 @@ HTTP 201 Created
 }
 ```
 
-### 3.2 cURL 示例规范
-当提供命令行示例时：
-- 始终从 `curl -X <METHOD> "URL"` 开始
-- 将长命令分为多行，使用 `\` 换行符连接
-- 在 `Content-Type` 头前使用 `-H`
-- 将请求体使用 `-d` 参数，用单引号包装 JSON
-- 换行缩进应与命令开头对齐
+### 3.2 cURL Example Specifications
+When providing command-line examples：
+- Always start with `curl -X <METHOD> "URL"`
+- Split long commands across multiple lines using `\` line continuation
+- Use `-H` before `Content-Type` headers
+- Use `-d` parameter for request body, wrap JSON with single quotes
+- Indent continuations to align with command start
 
-### 3.3 参数说明表格
-对于需要参数说明的端点，使用以下表格格式：
+### 3.3 Parameter Description Tables
+For endpoints requiring parameter descriptions, use the following table format:
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | name      | string | Yes      | Display name |
 
-## 4. 数据结构定义标准
+## 4. Data Structure Definition Standards
 
-### 4.1 通用数据结构标记
-数据结构定义使用以下格式：
+### 4.1 General Data Structure Markup
+Define data structures using the following format:
 
 ```
 DATA STRUCTURE StructureName:
@@ -158,8 +158,8 @@ DATA STRUCTURE StructureName:
 - property3: Array[TypeName] (Description of array items)
 ```
 
-### 4.2 接口/实体定义
-对于接口定义使用 TypeScript 风格，保持通用性：
+### 4.2 Interface/Entity Definitions
+For interface definitions use TypeScript style, maintaining generality：
 
 ```typescript
 interface EntityName {
@@ -168,10 +168,10 @@ interface EntityName {
 }
 ```
 
-## 5. 状态与流程表示标准
+## 5. State and Process Representation Standards
 
-### 5.1 状态转换图
-使用 ASCII 风格绘制状态转换图：
+### 5.1 State Transition Diagrams
+Draw state transition diagrams using ASCII style：
 
 ```
                     ┌─────────────┐
@@ -190,44 +190,44 @@ interface EntityName {
                          └─────────────┘
 ```
 
-### 5.2 状态转移矩阵
-使用表格格式定义允许的转移：
+### 5.2 State Transition Matrix
+Use table format to define allowed transitions:
 
 | Source \ Target | `open` | `acknowledged` | `resolved` | `ignored` |
 |-----------------|--------|----------------|------------|-----------|
 | `open`          | -      | ✅             | ✅         | ✅        |
 | `acknowledged`  | ❌     | -              | ✅         | ✅        |
 
-### 5.3 决策流程描述
-对于业务流程，使用步骤编号或条件逻辑图。
+### 5.3 Decision Process Descriptions
+For business processes, use step numbering or conditional logic diagrams.
 
-## 6. 表格与列表标准
+## 6. Table and List Standards
 
-### 6.1 二维关系表格
-对于显示映射/对应关系的表格：
+### 6.1 Two-dimensional Relation Tables
+For displaying mapping/correspondence relationships：
 
 | Code | HTTP Status | Description |
 |------|-------------|-------------|
 | NOT_FOUND | 404 | Resource not found |
 
-### 6.2 单列表格
-仅列出元素时，使用简洁格式：
+### 6.2 Simple List Tables
+When only listing items, use concise format：
 
 - Item 1
 - Item 2
 - Item 3
 
-### 6.3 功能对比表格
-当需要对比特性时，使用特征列为第一列：
+### 6.3 Feature Comparison Tables
+When comparing features, use features as first column：
 
 | Feature | Current Behavior | New Requirement |
 |---------|------------------|------------------|
 | Auth | Basic | JWT |
 
-## 7. 错误处理示例标准
+## 7. Error Handling Example Standards
 
-### 7.1 标准错误格式
-统一的错误响应格式定义：
+### 7.1 Standard Error Format
+Unified error response format definition：
 
 ```json
 {
@@ -236,8 +236,8 @@ interface EntityName {
 }
 ```
 
-### 7.2 特定错误类型格式
-当需要提供详细错误信息时（例如验证错误）：
+### 7.2 Specific Error Type Format
+When providing detailed error information (e.g. validation errors)：
 
 ```json
 {
@@ -251,46 +251,46 @@ interface EntityName {
 }
 ```
 
-## 8. 注释与文档内引用
+## 8. Comments and In-document References
 
-### 8.1 行内注释
-使用标准 Markdown 注释格式，或在行尾添加简短说明。
-- 代码块：避免注释特定语言的注释符
-- 表格：必要时使用描述性文本解释复杂字段
+### 8.1 Inline Comments
+Use standard Markdown comment format or add brief explanations at end of lines.
+- Code blocks: avoid language-specific comment delimiters
+- Tables: when necessary use descriptive text to explain complex fields
 
-### 8.2 跨文档引用
-- 引用其他规则文件时，使用文件名
-- 引用其他服务或方法时，描述性提及而非具体语言实现
+### 8.2 Cross-document References
+- When referring to other rule files, use file names
+- When referring to other services or methods, use descriptive reference rather than specific language implementations
 
-## 9. 整体布局建议
+## 9. Overall Layout Suggestions
 
-### 9.1 部分组织结构
-1. 概念介绍
-2. 技术细节 
-3. 实际示例
-4. 行为矩阵/流程
-5. 实现注意事项
-6. 验证/测试要点
+### 9.1 Section Organization Structure
+1. Concept Introduction
+2. Technical Details 
+3. Practical Examples
+4. Behavior Matrices/Processes
+5. Implementation Notes
+6. Verification/Testing Points
 
-### 9.2 阅读流畅性
-- 每节应逐步深入，先易后难
-- 横线分隔明显不同类型的信息
-- 图表紧随其文字说明
-- 实现检查表放在最末尾
+### 9.2 Reading Flow
+- Each section should deepen gradually, from easier to harder topics
+- Dashes separate different types of information clearly
+- Graphs follow their textual descriptions closely
+- Implementation check lists placed at the end
 
-## 10. 不同类型的文档内容适应
+## 10. Content Adaptations for Different Document Types
 
-### 10.1 规则类文档
-- 定义明确的行为边界
-- 用清晰的禁止/允许标签区分
-- 包含触发条件和预期行为
+### 10.1 Rule-type Documents
+- Define explicit behavioral boundaries
+- Distinguish clearly with allow/disallow labels
+- Include trigger conditions and expected behaviors
 
-### 10.2 流程类文档  
-- 时间顺序步骤
-- 决策点标记
-- 可选执行路径
+### 10.2 Process-type Documents  
+- Sequential timeline steps
+- Decision point markers
+- Optional execution paths
 
-### 10.3 配置/架构类文档
-- 批注组件间关系
-- 显示数据流向
-- 分层结构关系
+### 10.3 Configuration/Architecture Documents
+- Annotate relationships between components
+- Show data flow direction
+- Document layered structure relationships
