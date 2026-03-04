@@ -5,6 +5,8 @@ import {
   getEntryByIdSchema,
 } from '../../../src/schemas/entrySchema';
 
+const VALID_OBJECT_ID = '507f1f77bcf86cd799439011';
+
 describe('entrySchema', () => {
   describe('createEntrySchema', () => {
     it('should validate valid entry creation data', () => {
@@ -89,7 +91,7 @@ describe('entrySchema', () => {
           order: 2,
         },
         params: {
-          id: 'entry-id-1',
+          id: VALID_OBJECT_ID,
         },
       };
 
@@ -103,7 +105,7 @@ describe('entrySchema', () => {
           description: 'New description',
         },
         params: {
-          id: 'entry-id-1',
+          id: VALID_OBJECT_ID,
         },
       };
 
@@ -115,7 +117,7 @@ describe('entrySchema', () => {
       const validData = {
         body: {},
         params: {
-          id: 'entry-id-1',
+          id: VALID_OBJECT_ID,
         },
       };
 
@@ -129,7 +131,7 @@ describe('entrySchema', () => {
           name: '',
         },
         params: {
-          id: 'entry-id-1',
+          id: VALID_OBJECT_ID,
         },
       };
 
@@ -148,13 +150,27 @@ describe('entrySchema', () => {
       const result = updateEntrySchema.safeParse(invalidData);
       expect(result.success).toBe(false);
     });
+
+    it('should reject invalid ObjectId format for id', () => {
+      const invalidData = {
+        body: {
+          name: 'Updated Entry',
+        },
+        params: {
+          id: 'entry-id-1', // not valid ObjectId
+        },
+      };
+
+      const result = updateEntrySchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('getEntryByIdSchema', () => {
     it('should validate valid id param', () => {
       const validData = {
         params: {
-          id: 'entry-id-1',
+          id: VALID_OBJECT_ID,
         },
       };
 
@@ -171,7 +187,7 @@ describe('entrySchema', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should accept any string as id', () => {
+    it('should accept valid MongoDB ObjectId', () => {
       const validData = {
         params: {
           id: '507f1f77bcf86cd799439011',

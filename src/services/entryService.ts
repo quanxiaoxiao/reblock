@@ -5,6 +5,7 @@ import { validatePagination } from '../utils/pagination';
 import { logService } from './logService';
 import { LogLevel, LogCategory, DataLossRisk } from '../models/logEntry';
 import mongoose from 'mongoose';
+import { canUseTransactions, isTransactionUnsupportedError, markTransactionsUnsupported } from '../utils/transaction';
 
 // MongoDB filter type - allows flexible query objects
 type MongoFilter = Record<string, unknown>;
@@ -26,48 +27,6 @@ export interface IEntryService {
 }
 
 export class EntryService implements IEntryService {
-  private transactionsSupported: boolean | null = null;
-
-  private async canUseTransactions(): Promise<boolean> {
-    if (this.transactionsSupported !== null) {
-      return this.transactionsSupported;
-    }
-
-    try {
-      const admin = mongoose.connection.db?.admin();
-      if (!admin) {
-        this.transactionsSupported = false;
-        return false;
-      }
-      const hello = await admin.command({ hello: 1 });
-      const isReplicaSet = Boolean(hello?.setName);
-      const isMongos = hello?.msg === 'isdbgrid';
-      this.transactionsSupported = isReplicaSet || isMongos;
-      return this.transactionsSupported;
-    } catch {
-      this.transactionsSupported = false;
-      return false;
-    }
-  }
-
-  private isTransactionUnsupportedError(error: unknown): boolean {
-    const errorLike = error as { message?: string; code?: number; codeName?: string };
-    const message = (errorLike?.message || '').toLowerCase();
-    const codeName = (errorLike?.codeName || '').toLowerCase();
-    const code = errorLike?.code;
-    if (!message && !codeName && typeof code !== 'number') return false;
-    return (
-      message.includes('transaction numbers are only allowed on a replica set member') ||
-      message.includes('transaction numbers are only allowed on a mongos') ||
-      message.includes('transactions are not supported') ||
-      message.includes('standalone servers do not support transactions') ||
-      message.includes('current topology does not support sessions') ||
-      message.includes('this deployment does not support retryable writes') ||
-      codeName.includes('illegaloperation') ||
-      codeName.includes('nosuchtransaction') ||
-      code === 20
-    );
-  }
   async create(entryData: Partial<IEntry>): Promise<IEntry> {
     // Business uniqueness check for alias (per business-uniqueness.rule.md)
     if (entryData.alias) {
@@ -229,20 +188,32 @@ export class EntryService implements IEntryService {
       isInvalid: { $ne: true }
     });
 
-    // Get block linkCount changes for logging
+    // Batch-load all referenced blocks to avoid N+1 queries
+    const blockIds = [...new Set(associatedResources.map(r => r.block.toString()))];
+    const blocks = await Block.find({ _id: { $in: blockIds } });
+    const blockMap = new Map(blocks.map(b => [b._id.toString(), b]));
+
+    // Build linkCount changes for logging
+    // Count how many resources reference each block (a block can be referenced multiple times)
+    const blockRefCounts = new Map<string, number>();
+    for (const resource of associatedResources) {
+      const bid = resource.block.toString();
+      blockRefCounts.set(bid, (blockRefCounts.get(bid) || 0) + 1);
+    }
+
     const blockLinkCountChanges: Array<{
       blockId: string;
       oldLinkCount: number;
       newLinkCount: number;
     }> = [];
 
-    for (const resource of associatedResources) {
-      const block = await Block.findById(resource.block);
+    for (const [bid, refCount] of blockRefCounts) {
+      const block = blockMap.get(bid);
       if (block) {
         blockLinkCountChanges.push({
-          blockId: block._id.toString(),
+          blockId: bid,
           oldLinkCount: block.linkCount,
-          newLinkCount: block.linkCount - 1
+          newLinkCount: Math.max(0, block.linkCount - refCount),
         });
       }
     }
@@ -275,13 +246,13 @@ export class EntryService implements IEntryService {
         })),
         blockLinkCountChanges,
       },
-      suggestedAction: '可通过恢复脚本恢复此操作',
+      suggestedAction: 'Can be recovered via restore script',
       recoverable: true,
       dataLossRisk: DataLossRisk.NONE,
       recoverySteps: [
-        '1. 更新 Entry: isInvalid=false, invalidatedAt=null',
-        '2. 批量更新 Resource: isInvalid=false, invalidatedAt=null',
-        '3. 恢复 Block linkCount',
+        '1. Update Entry: set isInvalid=false, invalidatedAt=null',
+        '2. Bulk update Resources: set isInvalid=false, invalidatedAt=null',
+        '3. Restore Block linkCount values',
       ],
       context: {
         detectedBy: 'system',
@@ -309,32 +280,29 @@ export class EntryService implements IEntryService {
           { new: true, ...saveOptions }
         );
 
-        // Soft delete associated resources and decrement block linkCount
-        for (const resource of associatedResources) {
-          await Resource.findByIdAndUpdate(
-            resource._id,
-            {
-              isInvalid: true,
-              invalidatedAt: now,
-              updatedAt: now,
-            },
-            saveOptions
+        // Soft delete all associated resources in bulk
+        if (associatedResources.length > 0) {
+          await Resource.updateMany(
+            { _id: { $in: associatedResources.map(r => r._id) } },
+            { isInvalid: true, invalidatedAt: now, updatedAt: now },
+            saveOptions,
           );
+        }
 
-          const block = await Block.findOne(
-            { _id: resource.block, isInvalid: { $ne: true } },
-            null,
-            findOptions
-          );
-          if (block) {
-            block.linkCount = Math.max(0, (block.linkCount || 0) - 1);
+        // Decrement block linkCounts using pre-fetched blockRefCounts (avoids N+1 queries)
+        for (const [bid, refCount] of blockRefCounts) {
+          const block = sessionArg
+            ? await Block.findOne({ _id: bid, isInvalid: { $ne: true } }, null, findOptions)
+            : blockMap.get(bid);
+          if (block && !block.isInvalid) {
+            block.linkCount = Math.max(0, (block.linkCount || 0) - refCount);
             block.updatedAt = now;
             await block.save(saveOptions);
           }
         }
       };
 
-      const useTransactions = await this.canUseTransactions();
+      const useTransactions = await canUseTransactions();
       if (useTransactions) {
         try {
           await session.withTransaction(async () => {
@@ -342,10 +310,10 @@ export class EntryService implements IEntryService {
           });
         } catch (error) {
           // Fallback for non-replica-set MongoDB (common in local/dev containers).
-          if (!this.isTransactionUnsupportedError(error)) {
+          if (!isTransactionUnsupportedError(error)) {
             throw error;
           }
-          this.transactionsSupported = false;
+          markTransactionsUnsupported();
           await applyDelete();
         }
       } else {

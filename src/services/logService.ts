@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { appendFile, mkdir, readdir, rename } from 'fs/promises';
 import { join } from 'path';
 import { env } from '../config/env';
-import { validatePagination, validatePaginationOptionalLimit } from '../utils/pagination';
+import { validatePaginationOptionalLimit } from '../utils/pagination';
 import { 
   LogEntry, 
   ILogEntry, 
@@ -259,11 +259,17 @@ export class LogService {
       status: IssueStatus.OPEN,
     });
 
-    // Save to MongoDB
+    // Pre-compute file location so we only need a single save
+    const date = new Date().toISOString().split('T')[0];
+    const dir = getIssuesDir();
+    const filePath = join(dir, `${date}.jsonl`);
+    entry.fileLocation = { date, filePath };
+
+    // Save to MongoDB (single write)
     await entry.save();
 
-    // Write to file
-    await this.writeToFile(entry, 'issues');
+    // Write to file (does not save to DB again)
+    await this.writeToFileOnly(entry, dir, filePath);
 
     return entry;
   }
@@ -272,8 +278,9 @@ export class LogService {
    * Log a cleanup action for audit purposes
    */
   async logCleanupAction(params: LogCleanupActionParams): Promise<ILogEntry> {
+    const now = Date.now();
     const entry = new LogEntry({
-      timestamp: Date.now(),
+      timestamp: now,
       level: params.success ? LogLevel.INFO : LogLevel.ERROR,
       category: params.success ? LogCategory.CLEANUP_ACTION : LogCategory.CLEANUP_ERROR,
       blockId: new Types.ObjectId(params.targetBlockId),
@@ -288,11 +295,11 @@ export class LogService {
       dataLossRisk: params.success ? DataLossRisk.NONE : DataLossRisk.LOW,
       context: {
         detectedBy: 'cleanup',
-        detectedAt: Date.now(),
+        detectedAt: now,
         environment: this.getEnvironment(),
       },
       status: IssueStatus.RESOLVED,
-      resolvedAt: Date.now(),
+      resolvedAt: now,
       resolution: params.success ? 'Cleanup action executed' : `Failed: ${params.error}`,
       resolvedBy: 'cleanup-script',
     });
@@ -417,16 +424,19 @@ export class LogService {
   }
 
   /**
-   * Find all open issues, optionally filtered by category
+   * Find open issues, optionally filtered by category.
+   * Hard-capped at 1000 results to prevent OOM on large datasets.
    */
-  async findOpenIssues(category?: LogCategory): Promise<ILogEntry[]> {
-    const filter: any = { status: IssueStatus.OPEN };
+  async findOpenIssues(category?: LogCategory, limit: number = 200): Promise<ILogEntry[]> {
+    const filter: Record<string, unknown> = { status: IssueStatus.OPEN };
     if (category) {
       filter.category = category;
     }
+    const safeLimit = Math.max(1, Math.min(1000, Math.floor(limit)));
     
     return LogEntry.find(filter)
       .sort({ timestamp: -1 })
+      .limit(safeLimit)
       .exec();
   }
 
@@ -592,7 +602,8 @@ export class LogService {
   }
 
   /**
-   * Write log entry to JSON Lines file
+   * Write log entry to JSON Lines file and update its fileLocation in DB.
+   * Used by methods that don't pre-set fileLocation before the initial save.
    */
   private async writeToFile(entry: ILogEntry, subdir: 'issues' | 'actions' | 'metrics'): Promise<void> {
     try {
@@ -600,24 +611,30 @@ export class LogService {
       const dir = subdir === 'issues' ? getIssuesDir() : subdir === 'actions' ? getActionsDir() : getMetricsDir();
       const filePath = join(dir, `${date}.jsonl`);
 
-      // Ensure directory exists
-      await mkdir(dir, { recursive: true });
+      await this.writeToFileOnly(entry, dir, filePath);
 
-      // Prepare entry for file (convert ObjectIds to strings)
-      const fileEntry = this.serializeForFile(entry);
-
-      // Append to file
-      const line = JSON.stringify(fileEntry) + '\n';
-      await appendFile(filePath, line, 'utf-8');
-
-      // Update entry with file location
-      entry.fileLocation = {
-        date,
-        filePath,
-      };
-      await entry.save();
+      // Update entry with file location (only if not already set)
+      if (!entry.fileLocation?.filePath) {
+        entry.fileLocation = { date, filePath };
+        await entry.save();
+      }
     } catch (error) {
       // File write failure should not break the main flow
+      console.error('Failed to write log to file:', error);
+    }
+  }
+
+  /**
+   * Write log entry to a specific JSONL file without updating DB.
+   * Used when fileLocation is pre-set before the initial save to avoid double-save.
+   */
+  private async writeToFileOnly(entry: ILogEntry, dir: string, filePath: string): Promise<void> {
+    try {
+      await mkdir(dir, { recursive: true });
+      const fileEntry = this.serializeForFile(entry);
+      const line = JSON.stringify(fileEntry) + '\n';
+      await appendFile(filePath, line, 'utf-8');
+    } catch (error) {
       console.error('Failed to write log to file:', error);
     }
   }
@@ -669,7 +686,7 @@ export class LogService {
   /**
    * Find and resolve open issues by blockId and category
    * Used by cleanup script to auto-close resolved issues
-   * Performance optimized: bulk update
+   * Performance optimized: uses updateMany for true bulk update
    */
   async resolveIssuesByBlockId(
     blockId: string,
@@ -680,40 +697,34 @@ export class LogService {
     const errors: string[] = [];
 
     try {
-      // Find all open issues matching the criteria
-      const openIssues = await LogEntry.find({
+      const now = Date.now();
+      const filter = {
         blockId: new Types.ObjectId(blockId),
-        category: category,
+        category,
         status: IssueStatus.OPEN,
+      };
+
+      const result = await LogEntry.updateMany(filter, {
+        $set: {
+          status: IssueStatus.RESOLVED,
+          resolvedAt: now,
+          resolution,
+          resolvedBy,
+        },
+        $push: {
+          statusHistory: {
+            $each: [{
+              status: IssueStatus.OPEN,
+              changedAt: now,
+              changedBy: resolvedBy,
+              note: 'Auto-resolved by cleanup action',
+            }],
+            $slice: -MAX_STATUS_HISTORY,
+          },
+        },
       });
 
-      if (openIssues.length === 0) {
-        return { resolved: 0, errors: [] };
-      }
-
-      const now = Date.now();
-
-      // Bulk update all matching issues
-      for (const issue of openIssues) {
-        // Add to status history
-        issue.statusHistory = issue.statusHistory || [];
-        pushToStatusHistory(issue.statusHistory, {
-          status: issue.status,
-          changedAt: now,
-          changedBy: resolvedBy,
-          note: 'Auto-resolved by cleanup action',
-        });
-
-        // Update status
-        issue.status = IssueStatus.RESOLVED;
-        issue.resolvedAt = now;
-        issue.resolution = resolution;
-        issue.resolvedBy = resolvedBy;
-
-        await issue.save();
-      }
-
-      return { resolved: openIssues.length, errors };
+      return { resolved: result.modifiedCount, errors };
     } catch (error) {
       errors.push(`Failed to resolve issues for block ${blockId}: ${error}`);
       return { resolved: 0, errors };

@@ -16,6 +16,7 @@ vi.mock('../../../src/services', () => ({
     rollbackBlock: vi.fn(),
     delete: vi.fn(),
     download: vi.fn(),
+    downloadMeta: vi.fn(),
   },
   logService: {
     logIssue: vi.fn().mockResolvedValue({}),
@@ -253,24 +254,18 @@ describe('ResourceRouter', () => {
     });
 
     it('should return 416 for invalid range', async () => {
-      // First call without range to get totalSize
-      // Second call with range throws 416
-      vi.mocked(resourceService.download)
-        .mockResolvedValueOnce({
-          filePath: '/test/file.txt',
-          mime: 'text/plain',
-          filename: 'test.txt',
-          size: 1000,
-          totalSize: 1000,
-        } as never)
-        .mockRejectedValueOnce(
-          new DownloadError('Invalid range', 416, 'INVALID_RANGE')
-        );
+      // downloadMeta is called first to get totalSize for range parsing
+      vi.mocked(resourceService.downloadMeta).mockResolvedValueOnce({
+        totalSize: 1000,
+        mime: 'text/plain',
+        filename: 'test.txt',
+      } as never);
 
       const res = await app.request('/resources/resource-id-1/download', {
         headers: { 'Range': 'bytes=2000-3000' },
       });
 
+      // Range 2000-3000 exceeds totalSize 1000, so parseRange returns null → 416
       expect(res.status).toBe(416);
     });
 

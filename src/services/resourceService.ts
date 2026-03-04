@@ -9,6 +9,7 @@ import { generateStorageName, generateIV } from '../utils/crypto';
 import { validatePagination } from '../utils/pagination';
 import { logService } from './logService';
 import { LogLevel, LogCategory, DataLossRisk } from '../models/logEntry';
+import { canUseTransactions, isTransactionUnsupportedError, markTransactionsUnsupported } from '../utils/transaction';
 
 // MongoDB filter type - allows flexible query objects
 type MongoFilter = Record<string, unknown>;
@@ -78,48 +79,6 @@ export interface IResourceService {
 }
 
 export class ResourceService implements IResourceService {
-  private transactionsSupported: boolean | null = null;
-
-  private async canUseTransactions(): Promise<boolean> {
-    if (this.transactionsSupported !== null) {
-      return this.transactionsSupported;
-    }
-
-    try {
-      const admin = mongoose.connection.db?.admin();
-      if (!admin) {
-        this.transactionsSupported = false;
-        return false;
-      }
-      const hello = await admin.command({ hello: 1 });
-      const isReplicaSet = Boolean(hello?.setName);
-      const isMongos = hello?.msg === 'isdbgrid';
-      this.transactionsSupported = isReplicaSet || isMongos;
-      return this.transactionsSupported;
-    } catch {
-      this.transactionsSupported = false;
-      return false;
-    }
-  }
-
-  private isTransactionUnsupportedError(error: unknown): boolean {
-    const errorLike = error as { message?: string; code?: number; codeName?: string };
-    const message = (errorLike?.message || '').toLowerCase();
-    const codeName = (errorLike?.codeName || '').toLowerCase();
-    const code = errorLike?.code;
-    if (!message && !codeName && typeof code !== 'number') return false;
-    return (
-      message.includes('transaction numbers are only allowed on a replica set member') ||
-      message.includes('transaction numbers are only allowed on a mongos') ||
-      message.includes('transactions are not supported') ||
-      message.includes('standalone servers do not support transactions') ||
-      message.includes('current topology does not support sessions') ||
-      message.includes('this deployment does not support retryable writes') ||
-      codeName.includes('illegaloperation') ||
-      codeName.includes('nosuchtransaction') ||
-      code === 20
-    );
-  }
 
   async create(resourceData: Partial<IResource>): Promise<IResource> {
     // Service layer injects timestamps (per timestamp-soft-delete rule)
@@ -235,7 +194,7 @@ export class ResourceService implements IResourceService {
         updatedResource = resource;
       };
 
-      const useTransactions = env.NODE_ENV !== 'test' && await this.canUseTransactions();
+      const useTransactions = env.NODE_ENV !== 'test' && await canUseTransactions();
       if (useTransactions) {
         try {
           await session.withTransaction(async () => {
@@ -243,10 +202,10 @@ export class ResourceService implements IResourceService {
           });
         } catch (error) {
           // Fallback for non-replica-set MongoDB (common in local/dev containers).
-          if (!this.isTransactionUnsupportedError(error)) {
+          if (!isTransactionUnsupportedError(error)) {
             throw error;
           }
-          this.transactionsSupported = false;
+          markTransactionsUnsupported();
           await applyMutation();
         }
       } else {
@@ -521,26 +480,55 @@ export class ResourceService implements IResourceService {
       return null;
     }
 
-    // Decrement block linkCount
-    const blockId = existingResource.block;
-    if (blockId) {
-      const block = await Block.findOne({ _id: blockId, isInvalid: { $ne: true } });
-      if (block) {
-        block.linkCount = Math.max(0, (block.linkCount || 0) - 1);
-        block.updatedAt = Date.now();
-        await block.save();
+    const session = await mongoose.startSession();
+    let result: IResource | null = null;
+
+    try {
+      const applyDelete = async (sessionArg?: mongoose.ClientSession) => {
+        const now = Date.now();
+        const opts = sessionArg ? { session: sessionArg } : undefined;
+
+        // Decrement block linkCount
+        const blockId = existingResource.block;
+        if (blockId) {
+          const block = await Block.findOne(
+            { _id: blockId, isInvalid: { $ne: true } },
+            null,
+            opts,
+          );
+          if (block) {
+            block.linkCount = Math.max(0, (block.linkCount || 0) - 1);
+            block.updatedAt = now;
+            await block.save(opts);
+          }
+        }
+
+        result = await Resource.findByIdAndUpdate(
+          id,
+          { isInvalid: true, invalidatedAt: now, updatedAt: now },
+          { new: true, ...opts },
+        );
+      };
+
+      const useTransactions = env.NODE_ENV !== 'test' && await canUseTransactions();
+      if (useTransactions) {
+        try {
+          await session.withTransaction(async () => {
+            await applyDelete(session);
+          });
+        } catch (error) {
+          if (!isTransactionUnsupportedError(error)) throw error;
+          markTransactionsUnsupported();
+          await applyDelete();
+        }
+      } else {
+        await applyDelete();
       }
+    } finally {
+      await session.endSession();
     }
 
-    return Resource.findByIdAndUpdate(
-      id,
-      {
-        isInvalid: true,
-        invalidatedAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-      { new: true }
-    );
+    return result;
   }
 
   private getStoragePath(sha256: string): string {
@@ -549,6 +537,37 @@ export class ResourceService implements IResourceService {
     const secondChar = storageName.substring(2, 3);
     const relativePath = `${prefix1}/${secondChar}${storageName}`;
     return path.join(env.STORAGE_BLOCK_DIR, relativePath);
+  }
+
+  /**
+   * Get resource metadata for download (totalSize, mime, filename, iv) without range validation.
+   * Used by Range request handling to determine totalSize before parsing the Range header,
+   * avoiding the need to call download() twice.
+   */
+  async downloadMeta(id: string): Promise<{ totalSize: number; mime: string; filename: string }> {
+    const resource = await Resource.findOne({
+      _id: id,
+      isInvalid: { $ne: true },
+    }).populate('block');
+
+    if (!resource) {
+      throw new DownloadError('Resource not found', 404);
+    }
+
+    const block = resource.block as IBlock;
+    if (!block || typeof block !== 'object' || !('sha256' in block)) {
+      throw new DownloadError(
+        `Data inconsistency: Block reference for resource ${id} is invalid`,
+        500,
+        'INVALID_BLOCK_REF',
+      );
+    }
+
+    return {
+      totalSize: block.size,
+      mime: resource.mime || 'application/octet-stream',
+      filename: resource.name || 'download',
+    };
   }
 
   async download(id: string, range?: { start: number; end: number }): Promise<DownloadResult> {
@@ -562,6 +581,15 @@ export class ResourceService implements IResourceService {
     }
 
     const block = resource.block as IBlock;
+
+    // Guard against null/invalid populated block reference
+    if (!block || typeof block !== 'object' || !('sha256' in block)) {
+      throw new DownloadError(
+        `Data inconsistency: Block reference for resource ${id} is invalid`,
+        500,
+        'INVALID_BLOCK_REF',
+      );
+    }
 
     // Data consistency check - block linkCount validation
     if (block.linkCount === 0) {

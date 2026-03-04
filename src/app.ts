@@ -42,25 +42,22 @@ const MONGO_URI = `mongodb://${auth}${MONGO_HOSTNAME}:${MONGO_PORT}/${MONGO_DATA
   auth ? '?authSource=admin' : ''
 }`;
 
-mongoose
-  .connect(MONGO_URI)
-  .then(async () => {
-    console.log('✅ Connected to MongoDB');
-    try {
-      if (typeof mongoose.syncIndexes === 'function') {
-        await mongoose.syncIndexes();
-        console.log('✅ Indexes synced');
-      }
-    } catch (indexError) {
-      console.warn('⚠️  Index sync failed:', indexError);
-    }
-    const defaultEntry = await entryService.getOrCreateDefault();
-    console.log(`✅ Default entry ready: ${defaultEntry.alias}`);
-  })
-  .catch((err) => {
-    console.error('❌ MongoDB connection error:', err);
-    process.exit(1);
-  });
+/**
+ * Connect to MongoDB and run post-connection setup.
+ * Must be awaited before the HTTP server starts accepting requests.
+ */
+export async function connectDatabase(): Promise<void> {
+  await mongoose.connect(MONGO_URI);
+  console.log('✅ Connected to MongoDB');
+  try {
+    await mongoose.syncIndexes();
+    console.log('✅ Indexes synced');
+  } catch (indexError) {
+    console.warn('⚠️  Index sync failed:', indexError);
+  }
+  const defaultEntry = await entryService.getOrCreateDefault();
+  console.log(`✅ Default entry ready: ${defaultEntry.alias}`);
+}
 
 // OpenAPI document and API docs - only available in development/test
 if (env.NODE_ENV !== 'production') {
@@ -168,10 +165,17 @@ app.openapi(
     },
   }),
   (c: Context) => {
+    const dbState = mongoose.connection.readyState;
+    // 0=disconnected, 1=connected, 2=connecting, 3=disconnecting
+    const dbReady = dbState === 1;
+    const status = dbReady ? 'healthy' : 'degraded';
+    const statusCode = dbReady ? 200 : 503;
+
     return c.json({
-      status: 'healthy',
+      status,
       timestamp: new Date().toISOString(),
-    });
+      database: dbReady ? 'connected' : 'disconnected',
+    }, statusCode);
   }
 );
 

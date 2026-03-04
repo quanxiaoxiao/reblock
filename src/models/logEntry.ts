@@ -146,7 +146,7 @@ export interface ILogEntry extends Document {
   
   // Metadata
   createdAt: number;
-  expiresAt?: number;
+  expiresAt?: Date;
 }
 
 // Schema definition
@@ -286,10 +286,10 @@ const logEntrySchema = new Schema<ILogEntry>({
     lineNumber: Number,
   },
   
-  // TTL expiration - stored as number (ms timestamp) for consistency
+  // TTL expiration - must be Date type for MongoDB TTL index to work
   expiresAt: { 
-    type: Number,
-    default: () => Date.now() + env.LOG_TTL_DAYS * 24 * 60 * 60 * 1000
+    type: Date,
+    default: () => new Date(Date.now() + env.LOG_TTL_DAYS * 24 * 60 * 60 * 1000),
   },
   
   // Explicit timestamp field (number ms), not mongoose timestamps

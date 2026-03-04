@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server';
-import app from './app';
+import app, { connectDatabase } from './app';
 import { env } from './config/env';
 import { schedule } from 'node-cron';
 import mongoose from 'mongoose';
@@ -100,13 +100,22 @@ let server: ReturnType<typeof serve>;
 async function gracefulShutdown(signal: string): Promise<void> {
   console.log(`\n${signal} received, starting graceful shutdown...`);
 
+  // Force exit after 10 seconds if graceful shutdown hangs
+  const forceExitTimer = setTimeout(() => {
+    console.error('❌ Graceful shutdown timed out after 10s, forcing exit');
+    process.exit(1);
+  }, 10_000);
+  forceExitTimer.unref();
+
   // Stop metrics scheduler
   metricsSnapshotService.stopScheduler();
   console.log('✅ Metrics scheduler stopped');
 
-  // Close HTTP server (stop accepting new connections)
+  // Close HTTP server and wait for in-flight requests to finish
   if (server) {
-    server.close();
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
     console.log('✅ HTTP server closed');
   }
 
@@ -119,6 +128,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
   }
 
   console.log('👋 Graceful shutdown complete');
+  clearTimeout(forceExitTimer);
   process.exit(0);
 }
 
@@ -126,14 +136,24 @@ async function gracefulShutdown(signal: string): Promise<void> {
 process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
 
-server = serve({
-  fetch: app.fetch,
-  port,
-}, (info) => {
-  console.log(`🚀 Server running on http://localhost:${info.port}`);
-  if (env.NODE_ENV !== 'production') {
-    console.log(`📄 API Reference: http://localhost:${info.port}/docs`);
-    console.log(`📊 OpenAPI JSON: http://localhost:${info.port}/openapi.json`);
+// Connect to MongoDB first, then start the HTTP server
+(async () => {
+  try {
+    await connectDatabase();
+  } catch (err) {
+    console.error('❌ MongoDB connection error:', err);
+    process.exit(1);
   }
-  console.log(`🔗 Health Check: http://localhost:${info.port}/health`);
-});
+
+  server = serve({
+    fetch: app.fetch,
+    port,
+  }, (info) => {
+    console.log(`🚀 Server running on http://localhost:${info.port}`);
+    if (env.NODE_ENV !== 'production') {
+      console.log(`📄 API Reference: http://localhost:${info.port}/docs`);
+      console.log(`📊 OpenAPI JSON: http://localhost:${info.port}/openapi.json`);
+    }
+    console.log(`🔗 Health Check: http://localhost:${info.port}/health`);
+  });
+})();

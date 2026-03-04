@@ -5,15 +5,23 @@ import { env } from '../config/env';
 const ALGORITHM = 'aes-256-ctr';
 
 /**
- * Get encryption key from environment variable
- * Key must be base64 encoded 32 bytes
+ * Cached encryption key to avoid repeated base64 parsing on every operation.
+ * Parsed lazily on first use.
+ */
+let _cachedKey: Buffer | null = null;
+
+/**
+ * Get encryption key from environment variable (cached after first call).
+ * Key must be base64 encoded 32 bytes.
  */
 function getEncryptionKey(): Buffer {
+  if (_cachedKey) return _cachedKey;
   const key = Buffer.from(env.ENCRYPTION_KEY, 'base64');
   if (key.length !== 32) {
     throw new Error(`Invalid encryption key length: ${key.length} bytes, expected 32 bytes`);
   }
-  return key;
+  _cachedKey = key;
+  return _cachedKey;
 }
 
 /**

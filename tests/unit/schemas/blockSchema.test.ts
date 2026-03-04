@@ -5,12 +5,16 @@ import {
   getBlockByIdSchema,
 } from '../../../src/schemas/blockSchema';
 
+// Valid test fixtures matching new schema requirements
+const VALID_SHA256 = 'a'.repeat(64); // 64-char lowercase hex
+const VALID_OBJECT_ID = '507f1f77bcf86cd799439011'; // 24-char hex
+
 describe('blockSchema', () => {
   describe('createBlockSchema', () => {
     it('should validate valid block creation data', () => {
       const validData = {
         body: {
-          sha256: 'abc123def456',
+          sha256: VALID_SHA256,
           linkCount: 1,
           size: 1024,
         },
@@ -23,7 +27,7 @@ describe('blockSchema', () => {
     it('should validate without optional fields', () => {
       const validData = {
         body: {
-          sha256: 'abc123def456',
+          sha256: VALID_SHA256,
         },
       };
 
@@ -36,6 +40,17 @@ describe('blockSchema', () => {
         body: {
           sha256: '',
           linkCount: 1,
+        },
+      };
+
+      const result = createBlockSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject invalid sha256 format', () => {
+      const invalidData = {
+        body: {
+          sha256: 'abc123', // too short
         },
       };
 
@@ -57,8 +72,20 @@ describe('blockSchema', () => {
     it('should reject wrong types', () => {
       const invalidData = {
         body: {
-          sha256: 'abc123',
+          sha256: VALID_SHA256,
           linkCount: 'not a number',
+        },
+      };
+
+      const result = createBlockSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject negative linkCount', () => {
+      const invalidData = {
+        body: {
+          sha256: VALID_SHA256,
+          linkCount: -1,
         },
       };
 
@@ -71,11 +98,10 @@ describe('blockSchema', () => {
     it('should validate valid block update data', () => {
       const validData = {
         body: {
-          sha256: 'new-sha256',
           linkCount: 2,
         },
         params: {
-          id: 'block-id-1',
+          id: VALID_OBJECT_ID,
         },
       };
 
@@ -89,7 +115,7 @@ describe('blockSchema', () => {
           linkCount: 3,
         },
         params: {
-          id: 'block-id-1',
+          id: VALID_OBJECT_ID,
         },
       };
 
@@ -101,7 +127,7 @@ describe('blockSchema', () => {
       const validData = {
         body: {},
         params: {
-          id: 'block-id-1',
+          id: VALID_OBJECT_ID,
         },
       };
 
@@ -109,26 +135,43 @@ describe('blockSchema', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should reject empty string for sha256', () => {
-      const invalidData = {
+    it('should not accept sha256 in update body', () => {
+      // sha256 is intentionally excluded from updates to protect content-addressable integrity
+      const data = {
         body: {
-          sha256: '',
+          sha256: VALID_SHA256,
         },
         params: {
-          id: 'block-id-1',
+          id: VALID_OBJECT_ID,
         },
+      };
+
+      const result = updateBlockSchema.safeParse(data);
+      // Zod strips unknown keys by default, so it passes but sha256 is removed
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.body).not.toHaveProperty('sha256');
+      }
+    });
+
+    it('should require params.id', () => {
+      const invalidData = {
+        body: {
+          linkCount: 1,
+        },
+        params: {},
       };
 
       const result = updateBlockSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
     });
 
-    it('should require params.id', () => {
+    it('should reject invalid ObjectId format for id', () => {
       const invalidData = {
-        body: {
-          sha256: 'abc123',
+        body: {},
+        params: {
+          id: 'block-id-1', // not a valid 24-char hex
         },
-        params: {},
       };
 
       const result = updateBlockSchema.safeParse(invalidData);
@@ -152,7 +195,7 @@ describe('blockSchema', () => {
     it('should validate valid id param', () => {
       const validData = {
         params: {
-          id: 'block-id-1',
+          id: VALID_OBJECT_ID,
         },
       };
 
@@ -177,7 +220,7 @@ describe('blockSchema', () => {
       };
 
       const result = getBlockByIdSchema.safeParse(invalidData);
-      expect(result.success).toBe(true); // Empty string is still a string
+      expect(result.success).toBe(false); // Empty string doesn't match ObjectId regex
     });
 
     it('should reject non-string id', () => {

@@ -89,6 +89,18 @@ function createRequestController(rawSignal: AbortSignal, timeoutMs: number): {
   };
 }
 
+/** Timing-safe token comparison to prevent timing attacks */
+function safeTokenCompare(a: string, b: string): boolean {
+  try {
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+  } catch {
+    return false;
+  }
+}
+
 // Authentication middleware
 async function migrationAuthMiddleware(c: Context, next: () => Promise<void>) {
   // Check if migration API is enabled
@@ -96,9 +108,9 @@ async function migrationAuthMiddleware(c: Context, next: () => Promise<void>) {
     return c.json({ error: 'Migration API is disabled' }, 403);
   }
 
-  // Check token
+  // Check token with timing-safe comparison
   const token = c.req.header('x-migration-token');
-  if (!token || token !== env.MIGRATION_API_TOKEN) {
+  if (!token || !env.MIGRATION_API_TOKEN || !safeTokenCompare(token, env.MIGRATION_API_TOKEN)) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 

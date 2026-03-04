@@ -13,6 +13,32 @@ export interface ValidatedPagination {
   offset: number;
 }
 
+// Shared constants
+const DEFAULT_LIMIT = 50;
+const MIN_LIMIT = 1;
+const DEFAULT_MAX_LIMIT = 200;
+const MAX_OFFSET = 100_000;
+
+/**
+ * Validate and clamp an offset value.
+ */
+function clampOffset(raw?: number): number {
+  if (typeof raw === 'number' && !isNaN(raw)) {
+    return Math.max(0, Math.min(MAX_OFFSET, Math.floor(raw)));
+  }
+  return 0;
+}
+
+/**
+ * Validate and clamp a limit value within [MIN_LIMIT, maxLimit].
+ */
+function clampLimit(raw: number | undefined, maxLimit: number, defaultVal: number): number {
+  if (typeof raw === 'number' && !isNaN(raw)) {
+    return Math.max(MIN_LIMIT, Math.min(maxLimit, Math.floor(raw)));
+  }
+  return defaultVal;
+}
+
 /**
  * Validates and normalizes pagination parameters according to system boundaries
  * 
@@ -24,26 +50,10 @@ export interface ValidatedPagination {
  * @returns Normalized pagination parameters within valid bounds
  */
 export function validatePagination(params?: PaginationParams): ValidatedPagination {
-  const rawLimit = params?.limit;
-  const rawOffset = params?.offset;
-
-  // Validate limit: must be number, within 1-200, default 50
-  let limit: number;
-  if (typeof rawLimit === 'number' && !isNaN(rawLimit)) {
-    limit = Math.max(1, Math.min(200, Math.floor(rawLimit)));
-  } else {
-    limit = 50;
-  }
-
-  // Validate offset: must be number, within 0-100000, default 0
-  let offset: number;
-  if (typeof rawOffset === 'number' && !isNaN(rawOffset)) {
-    offset = Math.max(0, Math.min(100000, Math.floor(rawOffset)));
-  } else {
-    offset = 0;
-  }
-
-  return { limit, offset };
+  return {
+    limit: clampLimit(params?.limit, DEFAULT_MAX_LIMIT, DEFAULT_LIMIT),
+    offset: clampOffset(params?.offset),
+  };
 }
 
 /**
@@ -55,28 +65,12 @@ export function validatePagination(params?: PaginationParams): ValidatedPaginati
  */
 export function validatePaginationWithMaxLimit(
   params?: PaginationParams,
-  maxLimit: number = 200
+  maxLimit: number = DEFAULT_MAX_LIMIT,
 ): ValidatedPagination {
-  const rawLimit = params?.limit;
-  const rawOffset = params?.offset;
-
-  // Validate limit with custom max
-  let limit: number;
-  if (typeof rawLimit === 'number' && !isNaN(rawLimit)) {
-    limit = Math.max(1, Math.min(maxLimit, Math.floor(rawLimit)));
-  } else {
-    limit = 50;
-  }
-
-  // Validate offset: must be number, within 0-100000, default 0
-  let offset: number;
-  if (typeof rawOffset === 'number' && !isNaN(rawOffset)) {
-    offset = Math.max(0, Math.min(100000, Math.floor(rawOffset)));
-  } else {
-    offset = 0;
-  }
-
-  return { limit, offset };
+  return {
+    limit: clampLimit(params?.limit, maxLimit, DEFAULT_LIMIT),
+    offset: clampOffset(params?.offset),
+  };
 }
 
 /**
@@ -90,22 +84,10 @@ export function validatePaginationOptionalLimit(params?: PaginationParams): {
   limit?: number;
   offset: number;
 } {
-  const rawLimit = params?.limit;
-  const rawOffset = params?.offset;
+  const raw = params?.limit;
+  const limit = typeof raw === 'number' && !isNaN(raw)
+    ? Math.max(MIN_LIMIT, Math.min(DEFAULT_MAX_LIMIT, Math.floor(raw)))
+    : undefined;
 
-  // Validate limit: must be number, within 1-200, otherwise undefined
-  let limit: number | undefined;
-  if (typeof rawLimit === 'number' && !isNaN(rawLimit)) {
-    limit = Math.max(1, Math.min(200, Math.floor(rawLimit)));
-  }
-
-  // Validate offset: must be number, within 0-100000, default 0
-  let offset: number;
-  if (typeof rawOffset === 'number' && !isNaN(rawOffset)) {
-    offset = Math.max(0, Math.min(100000, Math.floor(rawOffset)));
-  } else {
-    offset = 0;
-  }
-
-  return { limit, offset };
+  return { limit, offset: clampOffset(params?.offset) };
 }

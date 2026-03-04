@@ -1,32 +1,32 @@
 import { z } from 'zod';
+import { objectIdSchema } from './blockSchema';
 
 export const createResourceSchema = z.object({
   body: z.object({
-    block: z.string(),
-    mime: z.string().optional(),
-    entry: z.string(),
-    category: z.string().optional(),
-    description: z.string().optional(),
-    name: z.string().optional(),
+    block: objectIdSchema,
+    mime: z.string().max(128).optional(),
+    entry: objectIdSchema,
+    category: z.string().max(128).optional(),
+    description: z.string().max(2048).optional(),
+    name: z.string().max(512).optional(),
   })
 });
 
 export const updateResourceSchema = z.object({
   body: z.object({
-    block: z.string().optional(),
-    mime: z.string().optional(),
-    entry: z.string().optional(),
-    category: z.string().optional(),
-    description: z.string().optional(),
-    name: z.string().optional(),
+    // block and entry are intentionally excluded from updates — use PATCH /:id/block instead
+    mime: z.string().max(128).optional(),
+    category: z.string().max(128).optional(),
+    description: z.string().max(2048).optional(),
+    name: z.string().max(512).optional(),
   }),
   params: z.object({
-    id: z.string(),
+    id: objectIdSchema,
   }),
 });
 
 export const getResourceByIdSchema = z.object({
   params: z.object({
-    id: z.string(),
+    id: objectIdSchema,
   }),
 });

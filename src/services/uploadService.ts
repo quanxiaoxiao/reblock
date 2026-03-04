@@ -56,17 +56,17 @@ export class UploadService implements IUploadService {
     const entry = await this.validateEntryWithConfig(alias);
     this.throwIfAborted(signal);
 
-    // Step 2: Compute SHA256 of temp file
-    const sha256 = await this.computeSHA256(tempFilePath, signal);
-    this.throwIfAborted(signal);
-
-    // Step 3: Get file size
+    // Step 2: Get file size first (cheap) and validate before expensive hashing
     const stats = await fs.stat(tempFilePath);
     const size = stats.size;
     this.throwIfAborted(signal);
 
-    // Step 4: Validate file size against upload config
+    // Step 3: Validate file size against upload config (early rejection for oversized files)
     this.validateFileSize(size, entry.uploadConfig);
+
+    // Step 4: Compute SHA256 of temp file (expensive — only after size check passes)
+    const sha256 = await this.computeSHA256(tempFilePath, signal);
+    this.throwIfAborted(signal);
 
     // Step 5: Detect MIME type using file-type library
     const detectedMime = await this.detectMimeType(tempFilePath);

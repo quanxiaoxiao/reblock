@@ -5,6 +5,7 @@ import app from '../../src/app';
 vi.mock('mongoose', () => ({
   default: {
     connect: vi.fn().mockResolvedValue({}),
+    connection: { readyState: 1 },
     Schema: class Schema {
       static Types = {
         ObjectId: String,
@@ -18,6 +19,7 @@ vi.mock('mongoose', () => ({
     },
   },
   connect: vi.fn().mockResolvedValue({}),
+  connection: { readyState: 1 },
   Schema: class Schema {
     static Types = {
       ObjectId: String,

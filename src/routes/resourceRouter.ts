@@ -531,9 +531,9 @@ export async function handleResourceDownload(
 
     // Handle Range request
     if (rangeHeader) {
-      // First get resource info to know total size
-      const info = await resourceService.download(id);
-      const parsed = parseRange(rangeHeader, info.totalSize);
+      // Use lightweight metadata call to get totalSize without full download logic
+      const meta = await resourceService.downloadMeta(id);
+      const parsed = parseRange(rangeHeader, meta.totalSize);
 
       if (!parsed) {
         // Invalid range
@@ -541,7 +541,7 @@ export async function handleResourceDownload(
           error: 'Range Not Satisfiable',
           code: 'INVALID_RANGE',
         }, 416, {
-          'Content-Range': `bytes */${info.totalSize}`,
+          'Content-Range': `bytes */${meta.totalSize}`,
         });
       }
 

@@ -47,11 +47,13 @@ vi.mock('../../../src/models', () => ({
     {
       find: vi.fn(),
       findByIdAndUpdate: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ modifiedCount: 0 }),
     }
   ),
   Block: Object.assign(
     vi.fn(),
     {
+      find: vi.fn().mockResolvedValue([]),
       findById: vi.fn(),
       findOne: vi.fn(),
       findByIdAndUpdate: vi.fn(),
@@ -605,19 +607,21 @@ describe('EntryService', () => {
 
       vi.mocked(Entry.findOne).mockResolvedValue(existingEntry as never);
       vi.mocked(Resource.find).mockResolvedValue(associatedResources as never);
+      vi.mocked(Block.find).mockResolvedValue([] as never);
       vi.mocked(Entry.findByIdAndUpdate).mockResolvedValue(deletedEntry as never);
 
       const result = await service.delete('entry-id-1');
 
       expect(Entry.findOne).toHaveBeenCalledWith({ _id: 'entry-id-1', isInvalid: { $ne: true } });
+      // Entry soft-delete should still use findByIdAndUpdate
       expect(Entry.findByIdAndUpdate).toHaveBeenCalledWith(
         'entry-id-1',
-        {
+        expect.objectContaining({
           isInvalid: true,
           invalidatedAt: expect.any(Number),
           updatedAt: expect.any(Number),
-        },
-        { new: true }
+        }),
+        expect.any(Object)
       );
       expect(result?.isInvalid).toBe(true);
     });

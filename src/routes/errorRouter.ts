@@ -112,11 +112,23 @@ const ErrorSchema = z.object({
 
 const router = new OpenAPIHono();
 
+/** Timing-safe token comparison to prevent timing attacks */
+function safeTokenCompare(a: string, b: string): boolean {
+  try {
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+  } catch {
+    return false;
+  }
+}
+
 async function errorsAuthMiddleware(c: Context, next: () => Promise<void>) {
   const configuredToken = env.ERRORS_API_TOKEN || env.MIGRATION_API_TOKEN;
   if (!configuredToken) {
-    await next();
-    return;
+    // No token configured — reject all requests instead of silently allowing access
+    return c.json({ error: 'Errors API token not configured on server' }, 403);
   }
 
   const xErrorsToken = c.req.header('x-errors-token');
@@ -125,7 +137,7 @@ async function errorsAuthMiddleware(c: Context, next: () => Promise<void>) {
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined;
 
   const provided = xErrorsToken || xMigrationToken || bearerToken;
-  if (!provided || provided !== configuredToken) {
+  if (!provided || !safeTokenCompare(provided, configuredToken)) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
