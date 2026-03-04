@@ -6,6 +6,7 @@ import type { IResource, IBlock, IResourceHistory } from '../models';
 import type { PaginatedResult } from './types';
 import { env } from '../config/env';
 import { generateStorageName, generateIV } from '../utils/crypto';
+import { validatePagination } from '../utils/pagination';
 import { logService } from './logService';
 import { LogLevel, LogCategory, DataLossRisk } from '../models/logEntry';
 
@@ -322,8 +323,7 @@ export class ResourceService implements IResourceService {
       throw new ResourceMutationError('Invalid resource id', 400, 'INVALID_RESOURCE_ID');
     }
 
-    const limit = Math.max(1, Math.min(200, params.limit || 50));
-    const offset = Math.max(0, params.offset || 0);
+    const { limit, offset } = validatePagination({ limit: params.limit, offset: params.offset });
 
     const [items, total] = await Promise.all([
       ResourceHistory.find({ resourceId: id })
@@ -456,12 +456,15 @@ export class ResourceService implements IResourceService {
     const isPaginated = limit !== undefined || offset !== undefined;
 
     if (isPaginated) {
+      // Validate pagination parameters
+      const { limit: safeLimit, offset: safeOffset } = validatePagination({ limit, offset });
+
       // Apply stable ordering for pagination (createdAt DESC, _id DESC as tie-breaker)
       const [items, total] = await Promise.all([
         Resource.find(safeFilter)
           .sort({ createdAt: -1, _id: -1 })
-          .skip(offset || 0)
-          .limit(limit || 50)
+          .skip(safeOffset)
+          .limit(safeLimit)
           .populate('block', 'sha256 size')
           .exec(),
         Resource.countDocuments(safeFilter)

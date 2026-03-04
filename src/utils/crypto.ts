@@ -107,39 +107,36 @@ export function createDecryptStream(iv: Buffer): Transform {
  */
 export function createDecryptStreamWithOffset(iv: Buffer, offset: number): Transform {
   const key = getEncryptionKey();
-  
+
   // For AES-CTR, we need to adjust the IV/counter based on the offset
   // Each block is 16 bytes, so we calculate which block we're starting from
   const blockSize = 16;
   const blockIndex = Math.floor(offset / blockSize);
-  
+
   // Create a new IV with adjusted counter
   // The last 4 bytes of IV are the counter in big-endian format
+  // We need to ADD the block index to the counter (not XOR)
   const adjustedIv = Buffer.from(iv);
-  const counterBuffer = Buffer.alloc(4);
-  counterBuffer.writeUInt32BE(blockIndex, 0);
-  
-  // XOR the last 4 bytes with the block index
-  for (let i = 0; i < 4; i++) {
-    adjustedIv[12 + i] ^= counterBuffer[i];
-  }
-  
+  const currentCounter = adjustedIv.readUInt32BE(12);
+  const newCounter = (currentCounter + blockIndex) >>> 0; // Use >>> 0 to ensure uint32
+  adjustedIv.writeUInt32BE(newCounter, 12);
+
   const decipher = crypto.createDecipheriv(ALGORITHM, key, adjustedIv);
-  
+
   // Track bytes processed to handle partial first block
   let bytesProcessed = 0;
   const skipBytes = offset % blockSize;
-  
+
   return new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       try {
         let decrypted = decipher.update(chunk);
-        
+
         // If this is the first chunk and we need to skip bytes
         if (bytesProcessed === 0 && skipBytes > 0 && decrypted.length > skipBytes) {
           decrypted = decrypted.subarray(skipBytes);
         }
-        
+
         bytesProcessed += chunk.length;
         callback(null, decrypted);
       } catch (error) {

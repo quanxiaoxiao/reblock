@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import { appendFile, mkdir, readdir, rename } from 'fs/promises';
 import { join } from 'path';
 import { env } from '../config/env';
+import { validatePagination, validatePaginationOptionalLimit } from '../utils/pagination';
 import { 
   LogEntry, 
   ILogEntry, 
@@ -395,9 +396,11 @@ export class LogService {
    * Find all logs for a specific block
    */
   async findByBlockId(blockId: string, limit: number = 50): Promise<ILogEntry[]> {
+    // Validate limit: 1-200
+    const validatedLimit = Math.max(1, Math.min(200, Math.floor(limit)));
     return LogEntry.find({ blockId: new Types.ObjectId(blockId) })
       .sort({ timestamp: -1 })
-      .limit(limit)
+      .limit(validatedLimit)
       .exec();
   }
 
@@ -405,9 +408,11 @@ export class LogService {
    * Find all logs for a specific entry
    */
   async findByEntryId(entryId: string, limit: number = 50): Promise<ILogEntry[]> {
+    // Validate limit: 1-200
+    const validatedLimit = Math.max(1, Math.min(200, Math.floor(limit)));
     return LogEntry.find({ entryIds: new Types.ObjectId(entryId) })
       .sort({ timestamp: -1 })
-      .limit(limit)
+      .limit(validatedLimit)
       .exec();
   }
 
@@ -431,12 +436,11 @@ export class LogService {
   async findRecent(days: number, filter?: LogFilter): Promise<ILogEntry[]> {
     const query = this.buildRecentQuery(days, filter);
 
-    const limit = typeof filter?.limit === 'number'
-      ? Math.max(1, Math.min(500, Math.floor(filter.limit)))
-      : undefined;
-    const offset = typeof filter?.offset === 'number'
-      ? Math.max(0, Math.floor(filter.offset))
-      : 0;
+    // Validate pagination parameters (limit: 1-200 optional, offset: 0-100000)
+    const { limit, offset } = validatePaginationOptionalLimit({
+      limit: filter?.limit,
+      offset: filter?.offset
+    });
 
     const dbQuery = LogEntry.find(query)
       .sort({ timestamp: filter?.sortOrder === 'asc' ? 1 : -1 })

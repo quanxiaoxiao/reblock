@@ -1,6 +1,7 @@
 import { Entry, Resource, Block } from '../models';
 import type { IEntry } from '../models';
 import type { PaginatedResult } from './types';
+import { validatePagination } from '../utils/pagination';
 import { logService } from './logService';
 import { LogLevel, LogCategory, DataLossRisk } from '../models/logEntry';
 import mongoose from 'mongoose';
@@ -139,29 +140,32 @@ export class EntryService implements IEntryService {
 
   async list(filter: MongoFilter = {}, limit?: number, offset?: number): Promise<PaginatedResult<IEntry>> {
     const safeFilter = { ...filter, isInvalid: { $ne: true } };
-    
+
     // Check if pagination is requested
     const isPaginated = limit !== undefined || offset !== undefined;
-    
+
     if (isPaginated) {
+      // Validate pagination parameters
+      const { limit: safeLimit, offset: safeOffset } = validatePagination({ limit, offset });
+
       // Apply stable ordering for pagination (createdAt DESC, _id DESC as tie-breaker)
       const [items, total] = await Promise.all([
         Entry.find(safeFilter)
           .sort({ createdAt: -1, _id: -1 })
-          .skip(offset || 0)
-          .limit(limit || 50)
+          .skip(safeOffset)
+          .limit(safeLimit)
           .exec(),
         Entry.countDocuments(safeFilter)
       ]);
-      
+
       return {
         items,
         total,
-        limit,
-        offset
+        limit: safeLimit,
+        offset: safeOffset
       };
     }
-    
+
     // Non-paginated: return all items with total count
     const items = await Entry.find(safeFilter).sort({ createdAt: -1, _id: -1 }).exec();
     return {

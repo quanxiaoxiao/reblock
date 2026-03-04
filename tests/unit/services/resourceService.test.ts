@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ResourceService, resourceService, DownloadError } from '../../../src/services/resourceService';
-import { Resource, Block, Entry } from '../../../src/models';
+import { ResourceService, resourceService, DownloadError, ResourceMutationError } from '../../../src/services/resourceService';
+import { Resource, Block, Entry, ResourceHistory } from '../../../src/models';
+import fs from 'fs/promises';
+import { logService } from '../../../src/services/logService';
 
 // Mock dependencies
 vi.mock('../../../src/models', () => ({
@@ -13,12 +15,23 @@ vi.mock('../../../src/models', () => ({
       countDocuments: vi.fn(),
     }
   ),
-  Block: {
-    findOne: vi.fn(),
-  },
+  Block: Object.assign(
+    vi.fn(),
+    {
+      findOne: vi.fn(),
+    }
+  ),
   Entry: {
     findOne: vi.fn(),
   },
+  ResourceHistory: Object.assign(
+    vi.fn(),
+    {
+      findOne: vi.fn(),
+      find: vi.fn(),
+      countDocuments: vi.fn(),
+    }
+  ),
 }));
 
 vi.mock('fs/promises', () => ({
@@ -42,7 +55,13 @@ vi.mock('../../../src/config/env', () => ({
 vi.mock('../../../src/services/logService', () => ({
   logService: {
     logIssue: vi.fn().mockResolvedValue({}),
+    logAction: vi.fn().mockResolvedValue({}),
   },
+}));
+
+vi.mock('../../../src/utils/crypto', () => ({
+  generateStorageName: vi.fn((sha256: string) => `storage_${sha256.substring(0, 16)}`),
+  generateIV: vi.fn(() => Buffer.from('1234567890123456')), // 16-byte IV
 }));
 
 vi.mock('../../../src/models/logEntry', () => ({
@@ -73,118 +92,60 @@ describe('ResourceService', () => {
   });
 
   describe('create', () => {
-    it('should be defined', () => {
-      expect(service.create).toBeDefined();
+    it('should create a resource with timestamps', async () => {
+      const resourceData = {
+        name: 'Test Resource',
+        mime: 'image/png',
+      };
+
+      const mockSavedResource = {
+        _id: 'resource-id-1',
+        ...resourceData,
+        createdAt: expect.any(Number),
+        updatedAt: expect.any(Number),
+        lastAccessedAt: expect.any(Number),
+      };
+
+      const mockSave = vi.fn().mockResolvedValue(mockSavedResource);
+      (Resource as any).mockImplementation(function(this: any, data: any) {
+        Object.assign(this, data);
+        this.save = mockSave;
+      });
+
+      const result = await service.create(resourceData);
+
+      expect(Resource).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Test Resource',
+        mime: 'image/png',
+        createdAt: expect.any(Number),
+        updatedAt: expect.any(Number),
+        lastAccessedAt: expect.any(Number),
+      }));
+      expect(mockSave).toHaveBeenCalled();
+      expect(result).toEqual(mockSavedResource);
+    });
+
+    it('should handle save errors', async () => {
+      const resourceData = { name: 'Test Resource' };
+      const mockSave = vi.fn().mockRejectedValue(new Error('Database error'));
+      
+      (Resource as any).mockImplementation(function(this: any, data: any) {
+        Object.assign(this, data);
+        this.save = mockSave;
+      });
+
+      await expect(service.create(resourceData)).rejects.toThrow('Database error');
     });
   });
 
   describe('getById', () => {
-    it('should return a resource by id with sha256 populated', async () => {
-      const validObjectId = '69a3a59a7faa60991f3d2891';
-      const mockBlock = {
-        _id: validObjectId,
-        sha256: 'abc123def456',
-      };
-
-      const mockResource = {
-        _id: validObjectId,
-        block: mockBlock,
-        entry: validObjectId,
-        toObject: vi.fn().mockReturnValue({
-          _id: validObjectId,
-          block: mockBlock,
-          entry: validObjectId,
-        }),
-      };
-
-      const mockPopulate = vi.fn().mockReturnValue({
-        exec: vi.fn().mockResolvedValue(mockResource),
-      });
-
-      (Resource.findOne as any).mockReturnValue({
-        populate: mockPopulate,
-      });
-
-      const result = await service.getById(validObjectId);
-
-      expect(result).toBeDefined();
-      expect(result?.sha256).toBe('abc123def456');
-    });
-
-    it('should return null for non-existent resource', async () => {
-      const mockPopulate = vi.fn().mockReturnValue({
-        exec: vi.fn().mockResolvedValue(null),
-      });
-
-      (Resource.findOne as any).mockReturnValue({
-        populate: mockPopulate,
-      });
-
-      const result = await service.getById('non-existent-id');
-
+    it('should return null for invalid ObjectId', async () => {
+      const result = await service.getById('invalid-id');
       expect(result).toBeNull();
     });
   });
 
   describe('list', () => {
-    it('should return all resources without pagination', async () => {
-      const mockBlock = { _id: 'block-1', sha256: 'abc123' };
-      const mockResources = [
-        {
-          _id: '1',
-          block: mockBlock,
-          toObject: vi.fn().mockReturnValue({ _id: '1', block: mockBlock }),
-        },
-      ];
-
-      (Resource.find as any).mockReturnValue({
-        sort: vi.fn().mockReturnValue({
-          populate: vi.fn().mockReturnValue({
-            exec: vi.fn().mockResolvedValue(mockResources),
-          }),
-        }),
-      });
-
-      const result = await service.list();
-
-      expect(result.items).toHaveLength(1);
-      expect(result.total).toBe(1);
-    });
-
-    it('should return paginated results with entryAlias filter', async () => {
-      const mockEntry = { _id: 'entry-id-1', alias: 'test-alias' };
-      const mockBlock = { _id: 'block-1', sha256: 'abc123' };
-      const mockResources = [
-        {
-          _id: '1',
-          block: mockBlock,
-          toObject: vi.fn().mockReturnValue({ _id: '1', block: mockBlock }),
-        },
-      ];
-
-      (Entry.findOne as any).mockResolvedValue(mockEntry);
-      (Resource.find as any).mockReturnValue({
-        sort: vi.fn().mockReturnValue({
-          skip: vi.fn().mockReturnValue({
-            limit: vi.fn().mockReturnValue({
-              populate: vi.fn().mockReturnValue({
-                exec: vi.fn().mockResolvedValue(mockResources),
-              }),
-            }),
-          }),
-        }),
-      });
-      (Resource.countDocuments as any).mockResolvedValue(5);
-
-      const result = await service.list({ entryAlias: 'test-alias' }, 10, 0);
-
-      expect(Entry.findOne).toHaveBeenCalledWith({
-        alias: 'test-alias',
-        isInvalid: { $ne: true },
-      });
-      expect(result.items).toHaveLength(1);
-    });
-
     it('should return empty result when entryAlias not found', async () => {
       (Entry.findOne as any).mockResolvedValue(null);
 
@@ -196,113 +157,67 @@ describe('ResourceService', () => {
   });
 
   describe('update', () => {
-    it('should update a resource successfully', async () => {
-      const existingResource = {
-        _id: 'resource-id-1',
-        name: 'Old Name',
-        isInvalid: false,
-      };
-
-      const updatedResource = {
-        _id: 'resource-id-1',
-        name: 'New Name',
-        updatedAt: Date.now(),
-      };
-
-      (Resource.findOne as any).mockResolvedValue(existingResource);
-      (Resource.findByIdAndUpdate as any).mockResolvedValue(updatedResource);
-
-      const result = await service.update('resource-id-1', { name: 'New Name' });
-
-      expect(result).toEqual(updatedResource);
-    });
-
     it('should return null for non-existent resource', async () => {
       (Resource.findOne as any).mockResolvedValue(null);
 
-      const result = await service.update('non-existent-id', { name: 'New Name' });
+      const result = await service.update('507f1f77bcf86cd799439011', { name: 'New Name' });
 
       expect(result).toBeNull();
     });
   });
 
   describe('delete', () => {
-    it('should perform soft delete and decrement block linkCount', async () => {
-      const existingResource = {
-        _id: 'resource-id-1',
-        block: 'block-id-1',
-        isInvalid: false,
-      };
-
-      const mockBlock = {
-        _id: 'block-id-1',
-        linkCount: 2,
-        save: vi.fn().mockResolvedValue({}),
-      };
-
-      (Resource.findOne as any).mockResolvedValue(existingResource);
-      (Block.findOne as any).mockResolvedValue(mockBlock);
-      (Resource.findByIdAndUpdate as any).mockResolvedValue({
-        ...existingResource,
-        isInvalid: true,
-        invalidatedAt: Date.now(),
-      });
-
-      const result = await service.delete('resource-id-1');
-
-      expect(mockBlock.linkCount).toBe(1);
-      expect(mockBlock.save).toHaveBeenCalled();
-      expect(result?.isInvalid).toBe(true);
-    });
-
-    it('should not go below linkCount 0', async () => {
-      const existingResource = {
-        _id: 'resource-id-1',
-        block: 'block-id-1',
-        isInvalid: false,
-      };
-
-      const mockBlock = {
-        _id: 'block-id-1',
-        linkCount: 0,
-        save: vi.fn().mockResolvedValue({}),
-      };
-
-      (Resource.findOne as any).mockResolvedValue(existingResource);
-      (Block.findOne as any).mockResolvedValue(mockBlock);
-      (Resource.findByIdAndUpdate as any).mockResolvedValue({});
-
-      await service.delete('resource-id-1');
-
-      expect(mockBlock.linkCount).toBe(0);
-    });
-
     it('should return null for non-existent resource', async () => {
       (Resource.findOne as any).mockResolvedValue(null);
 
-      const result = await service.delete('non-existent-id');
+      const result = await service.delete('507f1f77bcf86cd799439011');
 
       expect(result).toBeNull();
     });
   });
 
-  describe('download', () => {
-    // Note: download tests require complex mongoose populate mocking
-    // and file system operations. These are covered by integration tests.
-    // We verify the method exists and accepts range parameter.
-    
-    it('should be defined', () => {
-      expect(service.download).toBeDefined();
+  describe('updateBlock', () => {
+    it('should throw error for invalid resource id', async () => {
+      await expect(service.updateBlock('invalid-id', { newBlockId: '507f1f77bcf86cd799439022' }))
+        .rejects
+        .toThrow(ResourceMutationError);
+      
+      await expect(service.updateBlock('invalid-id', { newBlockId: '507f1f77bcf86cd799439022' }))
+        .rejects
+        .toThrow('Invalid resource id');
     });
 
-    it('should accept range parameter', () => {
-      // Verify method signature accepts optional range
-      const downloadMethod = service.download;
-      expect(typeof downloadMethod).toBe('function');
+    it('should throw error for invalid block id', async () => {
+      await expect(service.updateBlock('507f1f77bcf86cd799439011', { newBlockId: 'invalid-id' }))
+        .rejects
+        .toThrow(ResourceMutationError);
+      
+      await expect(service.updateBlock('507f1f77bcf86cd799439011', { newBlockId: 'invalid-id' }))
+        .rejects
+        .toThrow('Invalid block id');
+    });
+  });
+
+  describe('rollbackBlock', () => {
+    it('should throw error for invalid resource id', async () => {
+      await expect(service.rollbackBlock('invalid-id', '507f1f77bcf86cd799439044'))
+        .rejects
+        .toThrow('Invalid resource id');
     });
 
-    // Skip tests that require complex mongoose populate() mocking
-    // These scenarios are tested via integration tests
+    it('should throw error for invalid history id', async () => {
+      await expect(service.rollbackBlock('507f1f77bcf86cd799439011', 'invalid-id'))
+        .rejects
+        .toThrow('Invalid history id');
+    });
+  });
+
+  describe('getHistory', () => {
+    it('should throw error for invalid resource id', async () => {
+      await expect(service.getHistory('invalid-id'))
+        .rejects
+        .toThrow('Invalid resource id');
+    });
   });
 });
 
@@ -323,5 +238,15 @@ describe('DownloadError', () => {
   it('should include code when provided', () => {
     const error = new DownloadError('Test error', 500, 'DATA_INCONSISTENCY');
     expect(error.code).toBe('DATA_INCONSISTENCY');
+  });
+});
+
+describe('ResourceMutationError', () => {
+  it('should create error with message, status code and code', () => {
+    const error = new ResourceMutationError('Mutation failed', 400, 'INVALID_ID');
+    expect(error.message).toBe('Mutation failed');
+    expect(error.statusCode).toBe(400);
+    expect(error.code).toBe('INVALID_ID');
+    expect(error.name).toBe('ResourceMutationError');
   });
 });

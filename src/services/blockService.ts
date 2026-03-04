@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { Block } from '../models';
 import type { IBlock } from '../models';
 import type { PaginatedResult } from './types';
+import { validatePagination } from '../utils/pagination';
 
 // MongoDB filter type - allows flexible query objects
 type MongoFilter = Record<string, unknown>;
@@ -60,12 +61,15 @@ export class BlockService implements IBlockService {
     const isPaginated = limit !== undefined || offset !== undefined;
 
     if (isPaginated) {
+      // Validate pagination parameters
+      const { limit: safeLimit, offset: safeOffset } = validatePagination({ limit, offset });
+
       // Apply stable ordering for pagination (createdAt DESC, _id DESC as tie-breaker)
       const [items, total] = await Promise.all([
         Block.find(safeFilter)
           .sort({ createdAt: -1, _id: -1 })
-          .skip(offset || 0)
-          .limit(limit || 50)
+          .skip(safeOffset)
+          .limit(safeLimit)
           .exec(),
         Block.countDocuments(safeFilter)
       ]);
@@ -73,8 +77,8 @@ export class BlockService implements IBlockService {
       return {
         items,
         total,
-        limit,
-        offset
+        limit: safeLimit,
+        offset: safeOffset
       };
     }
 
