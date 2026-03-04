@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-
 /**
  * Reblock Errors Fetch - Fetch errors from remote server
  *
@@ -15,6 +14,15 @@
 
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import {
+  c,
+  logBanner,
+  logSection,
+  logInfo,
+  logSuccess,
+  logError,
+  spinner,
+} from '../utils/style.mjs';
 
 function loadEnv() {
   try {
@@ -94,12 +102,14 @@ async function fetchErrors(options) {
   url.searchParams.set('limit', options.limit.toString());
   url.searchParams.set('offset', options.offset.toString());
 
-  console.error(`Fetching errors from ${url.toString()}...`);
+  const spin = spinner(`Fetching errors from ${options.server}...`).start();
 
   const response = await fetch(url.toString(), {
     headers: getAuthHeaders(),
   });
-  
+
+  spin.stop(true, `Fetched ${options.limit} errors`);
+
   if (!response.ok) {
     throw new Error(`Failed to fetch errors: ${response.status} ${response.statusText}`);
   }
@@ -114,7 +124,7 @@ async function fetchErrorExport(errorId, options) {
   const response = await fetch(url, {
     headers: getAuthHeaders(),
   });
-  
+
   if (!response.ok) {
     throw new Error(`Failed to fetch error export: ${response.status}`);
   }
@@ -128,24 +138,23 @@ function printErrors(data, options) {
     return;
   }
 
-  console.log('\n=== Error List ===');
-  console.log(`Total: ${data.total}`);
-  console.log('');
+  logBanner('Error List', `${options.server}:${options.port}`);
+  logInfo('Total', String(data.total));
 
   for (const error of data.errors) {
     const details = error.details || {};
-    console.log(`ID: ${error._id}`);
-    console.log(`  Status: ${error.status}`);
-    console.log(`  Level: ${error.level}`);
-    console.log(`  Time: ${new Date(error.timestamp).toISOString()}`);
-    console.log(`  Path: ${details.path || 'N/A'}`);
-    console.log(`  Method: ${details.method || 'N/A'}`);
-    console.log(`  Error: ${details.errorMessage || details.errorName || 'Unknown'}`);
+    console.log();
+    logInfo('ID', error._id);
+    logInfo('Status', error.status);
+    logInfo('Level', error.level);
+    logInfo('Time', new Date(error.timestamp).toISOString());
+    logInfo('Path', details.path || 'N/A');
+    logInfo('Method', details.method || 'N/A');
+    logInfo('Error', details.errorMessage || details.errorName || 'Unknown');
     if (error.resolvedAt) {
-      console.log(`  Resolved: ${new Date(error.resolvedAt).toISOString()}`);
-      console.log(`  Resolution: ${error.resolution}`);
+      logInfo('Resolved', new Date(error.resolvedAt).toISOString());
+      logInfo('Resolution', error.resolution);
     }
-    console.log('');
   }
 }
 
@@ -160,17 +169,31 @@ async function printExports(data, options) {
     return;
   }
 
-  console.log('\n=== AI-Friendly Error Exports ===');
-  console.log(`Total: ${data.total}\n`);
+  logBanner('AI-Friendly Error Exports', `${options.server}:${options.port}`);
+  logInfo('Total', String(data.total));
+
+  let successCount = 0;
+  let failCount = 0;
 
   for (const error of data.errors) {
     try {
       const exp = await fetchErrorExport(error._id, options);
+      console.log();
       console.log(JSON.stringify(exp, null, 2));
-      console.log('---');
+      console.log(`${c.dim}---${c.reset}`);
+      successCount++;
     } catch (err) {
-      console.error(`Failed to fetch export for ${error._id}:`, err.message);
+      logError(`Failed to fetch export for ${error._id}: ${err.message}`);
+      failCount++;
     }
+  }
+
+  console.log();
+  if (successCount > 0) {
+    logSuccess(`Exported ${successCount} errors`);
+  }
+  if (failCount > 0) {
+    logError(`Failed to export ${failCount} errors`);
   }
 }
 
@@ -186,7 +209,7 @@ async function main() {
       printErrors(data, options);
     }
   } catch (err) {
-    console.error('Error:', err.message);
+    logError(err.message);
     process.exit(1);
   }
 }

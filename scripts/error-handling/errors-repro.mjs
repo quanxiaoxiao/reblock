@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-
 /**
  * Reblock Errors Repro - Generate and optionally run hurl reproduction case from /errors
  *
@@ -19,6 +18,15 @@
 import { readFileSync, mkdirSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { spawn } from 'child_process';
+import {
+  c,
+  logBanner,
+  logSection,
+  logInfo,
+  logSuccess,
+  logError,
+  spinner,
+} from '../utils/style.mjs';
 
 function loadEnv() {
   try {
@@ -140,9 +148,14 @@ async function fetchErrors(options) {
   url.searchParams.set('limit', '1');
   url.searchParams.set('offset', '0');
 
+  const spin = spinner(`Fetching errors from ${options.server}...`).start();
+
   const response = await fetch(url.toString(), {
     headers: getAuthHeaders(),
   });
+
+  spin.stop(response.ok, response.ok ? 'Errors fetched' : 'Failed to fetch');
+
   if (!response.ok) {
     throw new Error(`Failed to fetch errors: ${response.status} ${response.statusText}`);
   }
@@ -157,6 +170,7 @@ async function fetchErrorExport(errorId, options) {
   const response = await fetch(url, {
     headers: getAuthHeaders(),
   });
+
   if (!response.ok) {
     throw new Error(`Failed to fetch error export: ${response.status} ${response.statusText}`);
   }
@@ -238,33 +252,39 @@ function runHurl(filePath, options) {
 async function main() {
   const options = parseArgs();
 
+  logBanner('Error Reproduction Generator', `${options.server}:${options.port}`);
+
   try {
     let errorId = options.id;
 
     if (!errorId) {
       const list = await fetchErrors(options);
       if (!list?.errors?.length) {
-        console.log('No matching errors found, nothing to reproduce.');
-        return;
+        logError('No matching errors found');
+        process.exit(1);
       }
       errorId = list.errors[0]._id;
+      logSuccess(`Selected error: ${errorId}`);
     }
 
+    const spin = spinner('Fetching error export...').start();
     const exported = await fetchErrorExport(errorId, options);
+    spin.stop(true, 'Export fetched');
+
     const outputPath = options.output || `tests/hurl/errors/generated/repro-${errorId}.hurl`;
     const absOutputPath = resolve(process.cwd(), outputPath);
     const content = generateHurl(errorId, exported, options);
 
     writeHurlFile(content, absOutputPath);
-
-    console.log(`Generated hurl file: ${absOutputPath}`);
+    logSuccess(`Generated hurl file: ${absOutputPath}`);
 
     if (options.run) {
+      logSection('Running Hurl');
       await runHurl(absOutputPath, options);
-      console.log('Hurl execution passed.');
+      logSuccess('Hurl execution passed');
     }
   } catch (err) {
-    console.error('Error:', err.message);
+    logError(err.message);
     process.exit(1);
   }
 }

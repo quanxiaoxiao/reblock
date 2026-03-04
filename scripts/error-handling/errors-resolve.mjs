@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-
 /**
  * Reblock Errors Resolve - Mark error as resolved on remote server
  *
@@ -12,6 +11,14 @@
 
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import {
+  c,
+  logBanner,
+  logInfo,
+  logSuccess,
+  logError,
+  spinner,
+} from '../utils/style.mjs';
 
 function loadEnv() {
   try {
@@ -79,9 +86,11 @@ async function resolveError(options) {
   const baseUrl = getBaseUrl(options);
   const url = `${baseUrl}/errors/${options.id}/resolve`;
 
-  console.error(`Resolving error ${options.id}...`);
-  console.error(`URL: ${url}`);
-  console.error(`Resolution: ${options.resolution}`);
+  logInfo('Error ID', options.id);
+  logInfo('Resolution', options.resolution);
+  logInfo('URL', url);
+
+  const spin = spinner('Resolving error...').start();
 
   const response = await fetch(url, {
     method: 'POST',
@@ -94,6 +103,8 @@ async function resolveError(options) {
     }),
   });
 
+  spin.stop(response.ok);
+
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Failed to resolve error: ${response.status} ${response.statusText} - ${errorText}`);
@@ -105,14 +116,17 @@ async function resolveError(options) {
 async function main() {
   const options = parseArgs();
 
+  logBanner('Error Resolver', `${options.server}:${options.port}`);
+
   try {
     const result = await resolveError(options);
-    
-    console.log('\n=== Error Resolved ===');
+
+    console.log();
     console.log(JSON.stringify(result, null, 2));
-    console.log(`\nError ${options.id} has been marked as resolved.`);
+
+    logSuccess(`Error ${options.id} marked as resolved`);
   } catch (err) {
-    console.error('Error:', err.message);
+    logError(err.message);
     process.exit(1);
   }
 }
