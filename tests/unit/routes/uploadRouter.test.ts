@@ -29,14 +29,18 @@ vi.mock('../../../src/config/env', () => ({
 vi.mock('fs/promises', () => ({
   default: {
     mkdir: vi.fn().mockResolvedValue(undefined),
-    open: vi.fn().mockResolvedValue({
-      write: vi.fn().mockResolvedValue({ bytesWritten: 1024 }),
-      close: vi.fn().mockResolvedValue(undefined),
-    }),
+    open: vi.fn().mockImplementation(() =>
+      Promise.resolve({
+        write: vi.fn().mockResolvedValue({ bytesWritten: 1024 }),
+        close: vi.fn().mockResolvedValue(undefined),
+      })
+    ),
     stat: vi.fn().mockResolvedValue({ size: 1024 }),
     unlink: vi.fn().mockResolvedValue(undefined),
   },
 }));
+
+
 
 describe('UploadRouter', () => {
   let app: Hono;
@@ -54,26 +58,42 @@ describe('UploadRouter', () => {
 
       const res = await app.request('/upload/non-existent', {
         method: 'POST',
-        body: '',
-      });
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array([1, 2, 3]));
+            controller.close();
+          }
+        }) as any,
+        duplex: 'half',
+      } as any);
 
       const body = await res.json();
       expect(body).toHaveProperty('error');
     });
 
     it('should return 500 for unexpected errors', async () => {
-      vi.mocked(uploadService.processUpload).mockRejectedValue(
-        new Error('Unexpected error')
+      const { default: fs } = await import('fs/promises');
+      const mockedFs = vi.mocked(fs);
+      mockedFs.open.mockImplementationOnce(() =>
+        Promise.reject(new Error('Unexpected error'))
       );
 
       const res = await app.request('/upload/test-alias', {
         method: 'POST',
-        body: '',
-      });
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array([1, 2, 3]));
+            controller.close();
+          }
+        }) as any,
+        duplex: 'half',
+      } as any);
 
       expect(res.status).toBe(500);
       const body = await res.json();
-      expect(body).toHaveProperty('error', 'Internal server error');
+      // Should return actual error message instead of generic "Internal Server Error"
+      expect(body).toHaveProperty('error');
+      expect(body.error).toContain('Unexpected error');
     });
 
     it('should log error when unexpected exception occurs', async () => {
@@ -83,8 +103,14 @@ describe('UploadRouter', () => {
 
       await app.request('/upload/test-alias', {
         method: 'POST',
-        body: '',
-      });
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array([1, 2, 3]));
+            controller.close();
+          }
+        }) as any,
+        duplex: 'half',
+      } as any);
 
       expect(logService.logIssue).toHaveBeenCalled();
     });

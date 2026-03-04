@@ -292,6 +292,28 @@ Per [error-fix-workflow.rule.md](../rules/error-fix-workflow.rule.md):
 
 **Fix**: Check file existence before operations, handle missing files gracefully
 
+### Generic "Internal Server Error" Message
+**Cause**: Route handlers returning hardcoded "{ error: 'Internal server error' }" messages bypassing centralized error handling
+
+**Fix**: Remove hardcoded error responses and let errors propagate to centralized error handler for consistent handling, logging, and client response format
+
+---
+
+## Error Prevention Guidelines
+
+When writing new code, avoid:
+
+- Returning hardcoded generic messages like `{ error: "Internal server error" }` 
+- Bypassing the centralized error handling system
+- Exposing internal technical details to clients in error responses
+- Skipping comprehensive error logging
+
+Instead, prefer:
+
+- Allowing errors to propagate to the centralized error handler
+- Using specific business error types that include contextual information
+- Structuring errors to be caught and formatted consistently
+
 ---
 
 ## Important Notes

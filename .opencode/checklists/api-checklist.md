@@ -17,6 +17,8 @@ When creating a new module:
 - [ ] calls service only
 - [ ] handles 404
 - [ ] correct HTTP status
+- [ ] no hardcoded error messages like "Internal server error"
+- [ ] all errors pass through centralized error handler
 
 ## Model
 - [ ] indexes defined

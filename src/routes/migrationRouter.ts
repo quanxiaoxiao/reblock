@@ -200,10 +200,23 @@ router.openapi(
       }
 
       console.error('Migration error:', error);
-      return c.json({
-        error: 'Internal server error',
-        code: 'INTERNAL_ERROR',
-      }, 500);
+      
+      // Prepare error response in the same format as the centralized error handler
+      // but without hardcoding generic messages
+      const errorId = crypto.randomUUID();
+      const timestamp = Date.now();
+      const requestId = c.req.header('x-request-id') || c.req.header('X-Request-Id') || errorId;
+      
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : 'An unexpected server error occurred',
+          errorId,
+          requestId,
+          statusCode: 500,
+          timestamp: new Date(timestamp).toISOString(),
+        },
+        500
+      );
     }
   }
 );

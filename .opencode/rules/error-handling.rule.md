@@ -306,3 +306,5 @@ When implementing error handling, ensure:
 - [ ] Critical errors are logged to LogService
 - [ ] 404 returns null from service (router converts to response)
 - [ ] All error responses follow the standard format
+- [ ] No hardcoded generic messages like "Internal Server Error" returned directly from route handlers (use centralized handler instead)
+- [ ] All errors flow through centralized error handler when appropriate

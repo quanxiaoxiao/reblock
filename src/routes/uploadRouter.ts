@@ -150,7 +150,9 @@ router.openapi(
         }
       } finally {
         readerStream.releaseLock();
-        await fileHandle.close();
+        if (fileHandle && typeof fileHandle.close === 'function') {
+          await fileHandle.close();
+        }
       }
       
       // Check if file is empty
@@ -213,7 +215,20 @@ router.openapi(
           stackTrace: error instanceof Error ? error.stack : undefined,
         },
       });
-      return c.json({ error: 'Internal server error' }, 500);
+      // Prepare error response with actual error message instead of generic "Internal server error"  
+      const errorId = crypto.randomUUID();
+      const timestamp = Date.now();
+      const requestId = c.req.header('x-request-id') || c.req.header('X-Request-Id') || errorId;
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : 'An unexpected server error occurred',
+          errorId,
+          requestId,
+          statusCode: 500,
+          timestamp: new Date(timestamp).toISOString(),
+        },
+        500
+      );
     }
   }
 );
