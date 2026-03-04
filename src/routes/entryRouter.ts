@@ -42,6 +42,13 @@ const ErrorSchema = z.object({
   error: z.string(),
 });
 
+const PaginatedEntryListSchema = z.object({
+  items: z.array(EntrySchema),
+  total: z.number(),
+  limit: z.number().optional(),
+  offset: z.number().optional(),
+});
+
 const router = new OpenAPIHono();
 
 // Create Entry
@@ -107,20 +114,38 @@ router.openapi(
     method: 'get',
     path: '/',
     tags: ['Entries'],
-    description: 'Get all entries',
+    description: 'Get all entries with optional pagination',
+    request: {
+      query: z.object({
+        limit: z.string().optional().openapi({
+          param: { name: 'limit', in: 'query' },
+          example: '20',
+        }),
+        offset: z.string().optional().openapi({
+          param: { name: 'offset', in: 'query' },
+          example: '0',
+        }),
+      }),
+    },
     responses: {
       200: {
         description: 'List of entries',
         content: {
           'application/json': {
-            schema: z.array(EntrySchema),
+            schema: PaginatedEntryListSchema,
           },
         },
       },
     },
   }),
   async (c: Context) => {
-    const result = await entryService.list();
+    const limit = c.req.query('limit');
+    const offset = c.req.query('offset');
+    const result = await entryService.list(
+      {},
+      limit ? parseInt(limit, 10) : undefined,
+      offset ? parseInt(offset, 10) : undefined
+    );
     return c.json(result);
   }
 );

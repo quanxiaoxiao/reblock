@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
+import crypto from 'crypto';
 import { env } from '../config/env';
 import { migrationService, MigrationError } from '../services/migrationService';
 

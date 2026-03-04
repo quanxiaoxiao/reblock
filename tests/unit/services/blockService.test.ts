@@ -178,16 +178,23 @@ describe('BlockService', () => {
   describe('update', () => {
     it('should update a block and set updatedAt timestamp', async () => {
       const updateData = { sha256: 'new-sha256' };
+      const existingBlock = {
+        _id: 'block-id-1',
+        sha256: 'old-sha256',
+        isInvalid: false,
+      };
       const updatedBlock = {
         _id: 'block-id-1',
         sha256: 'new-sha256',
         updatedAt: Date.now(),
       };
 
+      vi.mocked(Block.findOne).mockResolvedValue(existingBlock as never);
       vi.mocked(Block.findByIdAndUpdate).mockResolvedValue(updatedBlock as never);
 
       const result = await service.update('block-id-1', updateData);
 
+      expect(Block.findOne).toHaveBeenCalledWith({ _id: 'block-id-1', isInvalid: { $ne: true } });
       expect(Block.findByIdAndUpdate).toHaveBeenCalledWith(
         'block-id-1',
         {
@@ -200,6 +207,11 @@ describe('BlockService', () => {
     });
 
     it('should remove server-controlled fields from input', async () => {
+      const existingBlock = {
+        _id: 'block-id-1',
+        sha256: 'old-sha256',
+        isInvalid: false,
+      };
       const updateData = {
         sha256: 'new-sha256',
         createdAt: 123456,
@@ -207,6 +219,7 @@ describe('BlockService', () => {
         invalidatedAt: 123456,
       };
 
+      vi.mocked(Block.findOne).mockResolvedValue(existingBlock as never);
       vi.mocked(Block.findByIdAndUpdate).mockResolvedValue({} as never);
 
       await service.update('block-id-1', updateData);
@@ -218,16 +231,31 @@ describe('BlockService', () => {
     });
 
     it('should return null for non-existent block', async () => {
-      vi.mocked(Block.findByIdAndUpdate).mockResolvedValue(null as never);
+      vi.mocked(Block.findOne).mockResolvedValue(null as never);
 
       const result = await service.update('non-existent-id', { sha256: 'test' });
 
+      expect(Block.findOne).toHaveBeenCalledWith({ _id: 'non-existent-id', isInvalid: { $ne: true } });
+      expect(result).toBeNull();
+    });
+
+    it('should return null for soft-deleted block', async () => {
+      vi.mocked(Block.findOne).mockResolvedValue(null as never);
+
+      const result = await service.update('soft-deleted-id', { sha256: 'test' });
+
+      expect(Block.findOne).toHaveBeenCalledWith({ _id: 'soft-deleted-id', isInvalid: { $ne: true } });
       expect(result).toBeNull();
     });
   });
 
   describe('delete', () => {
     it('should perform soft delete with timestamps', async () => {
+      const existingBlock = {
+        _id: 'block-id-1',
+        sha256: 'abc123',
+        isInvalid: false,
+      };
       const deletedBlock = {
         _id: 'block-id-1',
         sha256: 'abc123',
@@ -236,10 +264,12 @@ describe('BlockService', () => {
         updatedAt: Date.now(),
       };
 
+      vi.mocked(Block.findOne).mockResolvedValue(existingBlock as never);
       vi.mocked(Block.findByIdAndUpdate).mockResolvedValue(deletedBlock as never);
 
       const result = await service.delete('block-id-1');
 
+      expect(Block.findOne).toHaveBeenCalledWith({ _id: 'block-id-1', isInvalid: { $ne: true } });
       expect(Block.findByIdAndUpdate).toHaveBeenCalledWith(
         'block-id-1',
         {
@@ -255,10 +285,20 @@ describe('BlockService', () => {
     });
 
     it('should return null for non-existent block', async () => {
-      vi.mocked(Block.findByIdAndUpdate).mockResolvedValue(null as never);
+      vi.mocked(Block.findOne).mockResolvedValue(null as never);
 
       const result = await service.delete('non-existent-id');
 
+      expect(Block.findOne).toHaveBeenCalledWith({ _id: 'non-existent-id', isInvalid: { $ne: true } });
+      expect(result).toBeNull();
+    });
+
+    it('should return null for already soft-deleted block', async () => {
+      vi.mocked(Block.findOne).mockResolvedValue(null as never);
+
+      const result = await service.delete('already-deleted-id');
+
+      expect(Block.findOne).toHaveBeenCalledWith({ _id: 'already-deleted-id', isInvalid: { $ne: true } });
       expect(result).toBeNull();
     });
   });

@@ -1,4 +1,4 @@
-import mongoose, { Document, Schema, Types, type CallbackError } from 'mongoose';
+import mongoose, { Document, Schema, Types } from 'mongoose';
 import { env } from '../config/env';
 
 /**
@@ -146,7 +146,7 @@ export interface ILogEntry extends Document {
   
   // Metadata
   createdAt: number;
-  expiresAt?: Date;
+  expiresAt?: number;
 }
 
 // Schema definition
@@ -286,15 +286,16 @@ const logEntrySchema = new Schema<ILogEntry>({
     lineNumber: Number,
   },
   
-  // TTL expiration
+  // TTL expiration - stored as number (ms timestamp) for consistency
   expiresAt: { 
-    type: Date,
-    default: () => new Date(Date.now() + env.LOG_TTL_DAYS * 24 * 60 * 60 * 1000)
+    type: Number,
+    default: () => Date.now() + env.LOG_TTL_DAYS * 24 * 60 * 60 * 1000
   },
-}, {
-  timestamps: {
-    createdAt: true,
-    updatedAt: false, // We use custom timestamp field
+  
+  // Explicit timestamp field (number ms), not mongoose timestamps
+  createdAt: {
+    type: Number,
+    default: () => Date.now()
   },
 });
 

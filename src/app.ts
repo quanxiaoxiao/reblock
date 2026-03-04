@@ -13,7 +13,7 @@ import errorRouter from './routes/errorRouter';
 import migrationRouter from './routes/migrationRouter';
 import metricsRouter from './routes/metricsRouter';
 import legacyRouter from './routes/legacyRouter';
-import { errorHandler } from './routes/middlewares/errorHandler';
+import { errorHandler, onErrorHandler } from './routes/middlewares/errorHandler';
 import { captureRequestBody } from './routes/middlewares/requestCapture';
 
 const app = new OpenAPIHono();
@@ -85,23 +85,41 @@ if (env.NODE_ENV !== 'production') {
   });
 
   // API Documentation - only available in development/test
-  app.get('/docs', async (c: Context) => {
-  
-  // 获取基本的 OpenAPI 规范
-  const openApiDocResponse = await app.fetch(
-    new Request(`${c.req.url.replace('/docs', '')}/openapi.json`)
-  );
-  const spec = await openApiDocResponse.json() as Record<string, unknown>;
-  
-  // 动态更新服务器URL为当前请求的URL
-  const currentUrl = new URL(c.req.url);
-  currentUrl.pathname = '';
-  spec.servers = [{
-    url: currentUrl.toString(),
-    description: 'Current Server'
-  }];
-  
-  return c.html(`
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/docs',
+      tags: ['Documentation'],
+      description: 'API documentation viewer using Scalar',
+      responses: {
+        200: {
+          description: 'API documentation HTML page',
+          content: {
+            'text/html': {
+              schema: z.string(),
+            },
+          },
+        },
+      },
+    }),
+    async (c: Context) => {
+      // 获取基本的 OpenAPI 规范
+      const openApiDocResponse = await app.fetch(
+        new Request(`${c.req.url.replace('/docs', '')}/openapi.json`)
+      );
+      const spec = (await openApiDocResponse.json()) as Record<string, unknown>;
+
+      // 动态更新服务器URL为当前请求的URL
+      const currentUrl = new URL(c.req.url);
+      currentUrl.pathname = '';
+      spec.servers = [
+        {
+          url: currentUrl.toString(),
+          description: 'Current Server',
+        },
+      ];
+
+      return c.html(`
 <!doctype html>
 <html>
   <head>
@@ -123,8 +141,9 @@ if (env.NODE_ENV !== 'production') {
     </script>
   </body>
 </html>
-  `);
-  });
+    `);
+    }
+  );
 }
 
 // Health check endpoint
@@ -173,9 +192,6 @@ if (env.MIGRATION_API_ENABLED) {
 }
 
 // Global error handler - catches ALL errors including OpenAPI route errors
-app.onError((err: Error, c: Context) => {
-  const { onErrorHandler } = require('./routes/middlewares/errorHandler');
-  return onErrorHandler(err, c);
-});
+app.onError((err: Error, c: Context) => onErrorHandler(err, c));
 
 export default app;

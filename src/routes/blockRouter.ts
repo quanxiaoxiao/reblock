@@ -17,6 +17,13 @@ const ErrorSchema = z.object({
   error: z.string(),
 });
 
+const PaginatedBlockListSchema = z.object({
+  items: z.array(BlockSchema),
+  total: z.number(),
+  limit: z.number().optional(),
+  offset: z.number().optional(),
+});
+
 const router = new OpenAPIHono();
 
 // List Blocks
@@ -25,20 +32,38 @@ router.openapi(
     method: 'get',
     path: '/',
     tags: ['Blocks'],
-    description: 'Get all blocks',
+    description: 'Get all blocks with optional pagination',
+    request: {
+      query: z.object({
+        limit: z.string().optional().openapi({
+          param: { name: 'limit', in: 'query' },
+          example: '20',
+        }),
+        offset: z.string().optional().openapi({
+          param: { name: 'offset', in: 'query' },
+          example: '0',
+        }),
+      }),
+    },
     responses: {
       200: {
         description: 'List of blocks',
         content: {
           'application/json': {
-            schema: z.array(BlockSchema),
+            schema: PaginatedBlockListSchema,
           },
         },
       },
     },
   }),
   async (c: Context) => {
-    const result = await blockService.list();
+    const limit = c.req.query('limit');
+    const offset = c.req.query('offset');
+    const result = await blockService.list(
+      {},
+      limit ? parseInt(limit, 10) : undefined,
+      offset ? parseInt(offset, 10) : undefined
+    );
     return c.json(result);
   }
 );

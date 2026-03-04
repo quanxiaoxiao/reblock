@@ -632,29 +632,15 @@ export class ResourceService implements IResourceService {
     const objectIdBuffer = (block._id as any).id || Buffer.from(block._id.toString(), 'hex');
     const iv = generateIV(objectIdBuffer);
 
-    // Update lastAccessedAt (async, non-blocking)
-    Resource.findByIdAndUpdate(id, {
-      lastAccessedAt: Date.now()
-    }).catch(async (error) => {
-      await logService.logIssue({
-        level: LogLevel.WARNING,
-        category: LogCategory.RUNTIME_ERROR,
-        resourceIds: [id],
-        details: {
-          operation: 'updateLastAccessedAt',
-          error: error.message,
-        },
-        suggestedAction: 'Investigate database write failure',
-        recoverable: true,
-        dataLossRisk: DataLossRisk.LOW,
-        context: {
-          detectedBy: 'resourceService',
-          detectedAt: Date.now(),
-          environment: env.NODE_ENV as 'development' | 'production' | 'test',
-          stackTrace: error.stack,
-        },
+    // Update lastAccessedAt - await to ensure consistency (per state-consistency rule)
+    try {
+      await Resource.findByIdAndUpdate(id, {
+        lastAccessedAt: Date.now()
       });
-    });
+    } catch (error) {
+      // Log warning but don't fail the download
+      console.warn(`[download] Failed to update lastAccessedAt for resource ${id}:`, error);
+    }
 
     const result: DownloadResult = {
       filePath,

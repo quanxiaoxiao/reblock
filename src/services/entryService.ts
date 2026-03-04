@@ -26,6 +26,48 @@ export interface IEntryService {
 }
 
 export class EntryService implements IEntryService {
+  private transactionsSupported: boolean | null = null;
+
+  private async canUseTransactions(): Promise<boolean> {
+    if (this.transactionsSupported !== null) {
+      return this.transactionsSupported;
+    }
+
+    try {
+      const admin = mongoose.connection.db?.admin();
+      if (!admin) {
+        this.transactionsSupported = false;
+        return false;
+      }
+      const hello = await admin.command({ hello: 1 });
+      const isReplicaSet = Boolean(hello?.setName);
+      const isMongos = hello?.msg === 'isdbgrid';
+      this.transactionsSupported = isReplicaSet || isMongos;
+      return this.transactionsSupported;
+    } catch {
+      this.transactionsSupported = false;
+      return false;
+    }
+  }
+
+  private isTransactionUnsupportedError(error: unknown): boolean {
+    const errorLike = error as { message?: string; code?: number; codeName?: string };
+    const message = (errorLike?.message || '').toLowerCase();
+    const codeName = (errorLike?.codeName || '').toLowerCase();
+    const code = errorLike?.code;
+    if (!message && !codeName && typeof code !== 'number') return false;
+    return (
+      message.includes('transaction numbers are only allowed on a replica set member') ||
+      message.includes('transaction numbers are only allowed on a mongos') ||
+      message.includes('transactions are not supported') ||
+      message.includes('standalone servers do not support transactions') ||
+      message.includes('current topology does not support sessions') ||
+      message.includes('this deployment does not support retryable writes') ||
+      codeName.includes('illegaloperation') ||
+      codeName.includes('nosuchtransaction') ||
+      code === 20
+    );
+  }
   async create(entryData: Partial<IEntry>): Promise<IEntry> {
     // Business uniqueness check for alias (per business-uniqueness.rule.md)
     if (entryData.alias) {
@@ -247,29 +289,70 @@ export class EntryService implements IEntryService {
       },
     });
 
-    // Soft delete the entry
-    const updatedEntry = await Entry.findByIdAndUpdate(
-      id,
-      {
-        isInvalid: true,
-        invalidatedAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-      { new: true }
-    );
+    const session = await mongoose.startSession();
+    let updatedEntry: IEntry | null = null;
 
-    // Soft delete associated resources and decrement block linkCount
-    const now = Date.now();
-    for (const resource of associatedResources) {
-      await Resource.findByIdAndUpdate(resource._id, {
-        isInvalid: true,
-        invalidatedAt: now,
-        updatedAt: now,
-      });
+    try {
+      const applyDelete = async (sessionArg?: mongoose.ClientSession) => {
+        const now = Date.now();
+        const findOptions = sessionArg ? { session: sessionArg } : undefined;
+        const saveOptions = sessionArg ? { session: sessionArg } : undefined;
 
-      await Block.findByIdAndUpdate(resource.block, {
-        $inc: { linkCount: -1 }
-      });
+        // Soft delete the entry
+        updatedEntry = await Entry.findByIdAndUpdate(
+          id,
+          {
+            isInvalid: true,
+            invalidatedAt: now,
+            updatedAt: now,
+          },
+          { new: true, ...saveOptions }
+        );
+
+        // Soft delete associated resources and decrement block linkCount
+        for (const resource of associatedResources) {
+          await Resource.findByIdAndUpdate(
+            resource._id,
+            {
+              isInvalid: true,
+              invalidatedAt: now,
+              updatedAt: now,
+            },
+            saveOptions
+          );
+
+          const block = await Block.findOne(
+            { _id: resource.block, isInvalid: { $ne: true } },
+            null,
+            findOptions
+          );
+          if (block) {
+            block.linkCount = Math.max(0, (block.linkCount || 0) - 1);
+            block.updatedAt = now;
+            await block.save(saveOptions);
+          }
+        }
+      };
+
+      const useTransactions = await this.canUseTransactions();
+      if (useTransactions) {
+        try {
+          await session.withTransaction(async () => {
+            await applyDelete(session);
+          });
+        } catch (error) {
+          // Fallback for non-replica-set MongoDB (common in local/dev containers).
+          if (!this.isTransactionUnsupportedError(error)) {
+            throw error;
+          }
+          this.transactionsSupported = false;
+          await applyDelete();
+        }
+      } else {
+        await applyDelete();
+      }
+    } finally {
+      await session.endSession();
     }
 
     return updatedEntry;
