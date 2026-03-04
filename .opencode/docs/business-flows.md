@@ -13,6 +13,69 @@ This document describes the key business flows in the Reblock service.
 5. [Block Deduplication Flow](#block-deduplication-flow)
 6. [Doctor Check Flow](#doctor-check-flow)
 7. [Cleanup Flow](#cleanup-flow)
+8. [Overload Protection Flow](#overload-protection-flow)
+
+---
+
+## Overload Protection Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Overload Protection (Upload/Migration)              │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Client Request                                                          │
+│    │                                                                    │
+│    ▼                                                                    │
+│  Admission Control Middleware                                           │
+│    ├─ inflight < maxInflight ? admit                                   │
+│    ├─ else enqueue (FIFO, short queue)                                 │
+│    └─ queue full / wait timeout -> reject                              │
+│         └─ HTTP 429(or configured), Retry-After, SERVER_OVERLOADED     │
+│    │                                                                    │
+│    ▼                                                                    │
+│  Route Handler (uploadRouter / migrationRouter)                         │
+│    ├─ request-level timeout controller                                  │
+│    ├─ abort propagation into service layer                              │
+│    ├─ best-effort cleanup on failure                                    │
+│    └─ migration payload guard (413)                                     │
+│    │                                                                    │
+│    ▼                                                                    │
+│  Runtime Metrics                                                        │
+│    └─ GET /metrics/runtime                                              │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Route Groups and Default Limits
+
+| Route Group | maxInflight | queueMax | queueTimeoutMs |
+|-------------|-------------|----------|----------------|
+| `upload` | 4 | 32 | 15000 |
+| `migration` | 1 | 8 | 10000 |
+
+### Overload Rejection Contract
+
+- Status: `429` by default (configurable with `OVERLOAD_STATUS_CODE`)
+- Header: `Retry-After`
+- Body:
+
+```json
+{
+  "error": "Server overloaded. Please retry later.",
+  "code": "SERVER_OVERLOADED",
+  "retryAfterMs": 15000
+}
+```
+
+### Timeout/Abort Contract
+
+- Timeout: returns `503` with `REQUEST_TIMEOUT`
+- Aborted request: returns `408` with `REQUEST_ABORTED`
+
+### Migration Payload Guard
+
+- Pre-parse: reject by `Content-Length` (or `x-content-length`) if exceeds `MIGRATION_MAX_PAYLOAD_BYTES`
+- Post-parse: reject by `contentBase64.length` if exceeds `MIGRATION_MAX_BASE64_CHARS`
+- Status: `413`, code: `PAYLOAD_TOO_LARGE`
 
 ---
 

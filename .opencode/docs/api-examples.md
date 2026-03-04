@@ -10,7 +10,8 @@ This document provides complete request/response examples for all Reblock API en
 2. [Resource API Examples](#resource-api-examples)
 3. [Block API Examples](#block-api-examples)
 4. [Upload API Examples](#upload-api-examples)
-5. [Error API Examples](#error-api-examples)
+5. [Overload Protection & Metrics Examples](#overload-protection--metrics-examples)
+6. [Error API Examples](#error-api-examples)
 
 ---
 
@@ -435,6 +436,134 @@ curl -X POST "http://localhost:3000/upload/my-docs?name=report.pdf" \
 {
   "error": "File type not allowed",
   "code": "INVALID_MIME_TYPE"
+}
+```
+
+---
+
+## Overload Protection & Metrics Examples
+
+### Upload Rejected by Admission Control (429)
+
+When server overload protection is active and upload queue is full or queue wait timed out:
+
+**Request:**
+```bash
+curl -i -X POST "http://localhost:3000/upload/my-docs?name=bulk-file.bin" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @[file_path]
+```
+
+**Response Headers (example):**
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 15
+Content-Type: application/json
+```
+
+**Response Body:**
+```json
+{
+  "error": "Server overloaded. Please retry later.",
+  "code": "SERVER_OVERLOADED",
+  "retryAfterMs": 15000
+}
+```
+
+### Migration Payload Too Large (413)
+
+Migration endpoint rejects oversized JSON/base64 payload before expensive processing:
+
+**Request:**
+```bash
+curl -X POST "http://localhost:3000/migration/resources/6906d8085481cd13472265cd" \
+  -H "Content-Type: application/json" \
+  -H "x-migration-token: your-secret-token" \
+  -d '{
+    "entryAlias": "notes",
+    "name": "huge-image.jpg",
+    "contentBase64": "......very_large_base64......"
+  }'
+```
+
+**Response (413 Payload Too Large):**
+```json
+{
+  "error": "Payload too large",
+  "code": "PAYLOAD_TOO_LARGE"
+}
+```
+
+### Request Timeout / Abort Responses
+
+Under request timeout or aborted connection, heavy routes return deterministic responses:
+
+**Timeout Response (503):**
+```json
+{
+  "error": "Upload request timed out",
+  "code": "REQUEST_TIMEOUT"
+}
+```
+
+**Aborted Response (408):**
+```json
+{
+  "error": "Upload request aborted",
+  "code": "REQUEST_ABORTED"
+}
+```
+
+### Query Runtime Overload Metrics
+
+Use this endpoint to inspect inflight/queue/rejection counters and tune limits:
+
+**Request:**
+```bash
+curl -X GET "http://localhost:3000/metrics/runtime"
+```
+
+**Response (200 OK):**
+```json
+{
+  "timestamp": 1772249000000,
+  "admission": [
+    {
+      "name": "upload",
+      "maxInflight": 4,
+      "queueMax": 32,
+      "queueTimeoutMs": 15000,
+      "inflight": 2,
+      "queued": 3,
+      "admittedTotal": 1024,
+      "queuedTotal": 120,
+      "rejectedTotal": 12,
+      "rejectedQueueFull": 8,
+      "rejectedQueueTimeout": 4,
+      "totalQueueWaitMs": 18500,
+      "maxQueueWaitMs": 1400
+    },
+    {
+      "name": "migration",
+      "maxInflight": 1,
+      "queueMax": 8,
+      "queueTimeoutMs": 10000,
+      "inflight": 0,
+      "queued": 0,
+      "admittedTotal": 220,
+      "queuedTotal": 41,
+      "rejectedTotal": 6,
+      "rejectedQueueFull": 2,
+      "rejectedQueueTimeout": 4,
+      "totalQueueWaitMs": 9200,
+      "maxQueueWaitMs": 1800
+    }
+  ],
+  "counters": {
+    "migrationPayloadTooLargeTotal": 3,
+    "requestTimeoutTotal": 7,
+    "requestAbortedTotal": 11
+  }
 }
 ```
 

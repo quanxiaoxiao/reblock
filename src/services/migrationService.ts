@@ -49,8 +49,9 @@ export class MigrationService {
   private readonly tempDir = env.STORAGE_TEMP_DIR;
   private readonly blocksDir = env.STORAGE_BLOCK_DIR;
 
-  async importResource(data: MigrationResourceData): Promise<MigrationResult> {
+  async importResource(data: MigrationResourceData, signal?: AbortSignal): Promise<MigrationResult> {
     const { legacyId, entryAlias, name, mime, category, description, contentBase64, createdAt, updatedAt } = data;
+    this.throwIfAborted(signal);
 
     // Step 1: Validate legacyId format
     if (!Types.ObjectId.isValid(legacyId)) {
@@ -59,15 +60,18 @@ export class MigrationService {
 
     // Step 2: Validate entry exists
     const entry = await this.validateEntry(entryAlias);
+    this.throwIfAborted(signal);
 
     // Step 3: Decode base64 content to temp file
     const tempFilePath = await this.decodeBase64ToTemp(contentBase64);
+    this.throwIfAborted(signal);
 
     try {
       // Step 4: Compute SHA256 and get size
-      const sha256 = await this.computeSHA256(tempFilePath);
+      const sha256 = await this.computeSHA256(tempFilePath, signal);
       const stats = await fs.stat(tempFilePath);
       const size = stats.size;
+      this.throwIfAborted(signal);
 
       // Step 5: Validate file size against entry config
       this.validateFileSize(size, entry.uploadConfig);
@@ -94,7 +98,8 @@ export class MigrationService {
       }
 
       // Step 7: Handle block deduplication with custom timestamps
-      const block = await this.handleBlockDeduplication(sha256, size, tempFilePath, createdAt, updatedAt);
+      const block = await this.handleBlockDeduplication(sha256, size, tempFilePath, createdAt, updatedAt, signal);
+      this.throwIfAborted(signal);
 
       // Step 8: Create resource with custom _id and timestamps
       const resource = await this.createResourceWithLegacyId({
@@ -167,7 +172,7 @@ export class MigrationService {
     }
   }
 
-  private async computeSHA256(filePath: string): Promise<string> {
+  private async computeSHA256(filePath: string, signal?: AbortSignal): Promise<string> {
     const hash = crypto.createHash('sha256');
     const fileHandle = await fs.open(filePath, 'r');
 
@@ -176,6 +181,7 @@ export class MigrationService {
       let bytesRead: number;
 
       do {
+        this.throwIfAborted(signal);
         bytesRead = await fileHandle.read(buffer, 0, buffer.length, null)
           .then(result => result.bytesRead);
         if (bytesRead > 0) {
@@ -183,6 +189,7 @@ export class MigrationService {
         }
       } while (bytesRead > 0);
 
+      this.throwIfAborted(signal);
       return hash.digest('hex');
     } finally {
       await fileHandle.close();
@@ -235,7 +242,8 @@ export class MigrationService {
     size: number,
     tempFilePath: string,
     createdAt?: number,
-    updatedAt?: number
+    updatedAt?: number,
+    signal?: AbortSignal
   ): Promise<IBlock> {
     const now = Date.now();
     const blockCreatedAt = createdAt || now;
@@ -243,13 +251,12 @@ export class MigrationService {
     const storageName = generateStorageName(sha256);
     const blockPath = this.getStoragePath(storageName);
 
-    await Block.syncIndexes({ background: false });
-
     let block: IBlock | null = null;
     let retryCount = 0;
     const maxRetries = 3;
 
     while (!block && retryCount < maxRetries) {
+      this.throwIfAborted(signal);
       try {
         // Try to create new block
         block = await Block.create({
@@ -276,7 +283,7 @@ export class MigrationService {
         }
 
         if (!fileExists) {
-          await this.encryptAndMoveFile(tempFilePath, blockPath, iv);
+          await this.encryptAndMoveFile(tempFilePath, blockPath, iv, signal);
         } else {
           await fs.unlink(tempFilePath).catch(() => {});
         }
@@ -317,14 +324,17 @@ export class MigrationService {
   private async encryptAndMoveFile(
     tempFilePath: string,
     blockPath: string,
-    iv: Buffer
+    iv: Buffer,
+    signal?: AbortSignal
   ): Promise<void> {
+    this.throwIfAborted(signal);
     const encryptStream = createEncryptStream(iv);
     const readStream = createReadStream(tempFilePath);
     const writeStream = createWriteStream(blockPath);
 
     try {
       await pipeline(readStream, encryptStream, writeStream);
+      this.throwIfAborted(signal);
     } catch (error) {
       try {
         await fs.unlink(blockPath);
@@ -444,6 +454,14 @@ export class MigrationService {
     } catch (logError) {
       // Don't fail the migration if logging fails
       console.error('Failed to log migration action:', logError);
+    }
+  }
+
+  private throwIfAborted(signal?: AbortSignal): void {
+    if (signal?.aborted) {
+      const abortError = new Error('Request aborted');
+      abortError.name = 'AbortError';
+      throw abortError;
     }
   }
 }

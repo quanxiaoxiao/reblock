@@ -2,6 +2,7 @@ import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { metricsSnapshotService } from '../services/metricsSnapshotService';
 import { env } from '../config/env';
+import { getAdmissionRuntimeSnapshot, getRuntimeCountersSnapshot } from '../middleware/admissionControl';
 
 const SnapshotSchema = z.object({
   windowStart: z.number(),
@@ -16,6 +17,33 @@ const SnapshotSchema = z.object({
 });
 
 const router = new OpenAPIHono();
+const RuntimeAdmissionSchema = z.object({
+  name: z.string(),
+  maxInflight: z.number(),
+  queueMax: z.number(),
+  queueTimeoutMs: z.number(),
+  inflight: z.number(),
+  queued: z.number(),
+  admittedTotal: z.number(),
+  queuedTotal: z.number(),
+  rejectedTotal: z.number(),
+  rejectedQueueFull: z.number(),
+  rejectedQueueTimeout: z.number(),
+  totalQueueWaitMs: z.number(),
+  maxQueueWaitMs: z.number(),
+});
+
+const RuntimeCountersSchema = z.object({
+  migrationPayloadTooLargeTotal: z.number(),
+  requestTimeoutTotal: z.number(),
+  requestAbortedTotal: z.number(),
+});
+
+const RuntimeMetricsSchema = z.object({
+  timestamp: z.number(),
+  admission: z.array(RuntimeAdmissionSchema),
+  counters: RuntimeCountersSchema,
+});
 
 router.openapi(
   createRoute({
@@ -52,6 +80,32 @@ router.openapi(
 
     const snapshot = metricsSnapshotService.getCurrentSnapshot(windowMinutes);
     return c.json(snapshot);
+  }
+);
+
+router.openapi(
+  createRoute({
+    method: 'get',
+    path: '/runtime',
+    tags: ['Metrics'],
+    description: 'Get runtime overload protection metrics (admission control and counters)',
+    responses: {
+      200: {
+        description: 'Runtime overload metrics',
+        content: {
+          'application/json': {
+            schema: RuntimeMetricsSchema,
+          },
+        },
+      },
+    },
+  }),
+  (_c: Context) => {
+    return _c.json({
+      timestamp: Date.now(),
+      admission: getAdmissionRuntimeSnapshot(),
+      counters: getRuntimeCountersSnapshot(),
+    });
   }
 );
 

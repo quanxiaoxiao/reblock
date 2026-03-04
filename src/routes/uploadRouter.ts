@@ -8,6 +8,7 @@ import { entryService, logService, auditService } from '../services';
 import { metricsSnapshotService } from '../services/metricsSnapshotService';
 import { env } from '../config/env';
 import { LogLevel, LogCategory, DataLossRisk } from '../models/logEntry';
+import { createAdmissionControl, incrementRuntimeCounter } from '../middleware/admissionControl';
 
 const ResourceSchema = z.object({
   _id: z.string(),
@@ -32,8 +33,17 @@ const ErrorSchema = z.object({
 });
 
 const router = new OpenAPIHono();
+const uploadRequestTimeoutMs = 60_000;
 
 const tempDir = env.STORAGE_TEMP_DIR;
+
+router.use('*', createAdmissionControl({
+  name: 'upload',
+  maxInflight: env.UPLOAD_MAX_INFLIGHT,
+  queueMax: env.UPLOAD_QUEUE_MAX,
+  queueTimeoutMs: env.UPLOAD_QUEUE_TIMEOUT_MS,
+  overloadStatusCode: env.OVERLOAD_STATUS_CODE,
+}));
 
 async function ensureTempDirectory(): Promise<void> {
   try {
@@ -48,6 +58,35 @@ async function ensureTempDirectory(): Promise<void> {
 function generateTempFileName(): string {
   const randomBytes = crypto.randomBytes(16).toString('hex');
   return `${randomBytes}.upload`;
+}
+
+function createRequestController(rawSignal: AbortSignal, timeoutMs: number): {
+  signal: AbortSignal;
+  timedOut: () => boolean;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  let isTimedOut = false;
+
+  const timeout = setTimeout(() => {
+    isTimedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  const onAbort = () => {
+    controller.abort();
+  };
+
+  rawSignal.addEventListener('abort', onAbort, { once: true });
+
+  return {
+    signal: controller.signal,
+    timedOut: () => isTimedOut,
+    cleanup: () => {
+      clearTimeout(timeout);
+      rawSignal.removeEventListener('abort', onAbort);
+    },
+  };
 }
 
 // Upload Endpoint
@@ -131,6 +170,8 @@ router.openapi(
     const tempFileName = generateTempFileName();
     const tempFilePath = path.join(tempDir, tempFileName);
     
+    const requestLifecycle = createRequestController(c.req.raw.signal, uploadRequestTimeoutMs);
+
     try {
       // Stream request body to temp file (no buffering)
       const reader = c.req.raw.body;
@@ -144,6 +185,11 @@ router.openapi(
       
       try {
         while (true) {
+          if (requestLifecycle.signal.aborted) {
+            const abortError = new Error('Upload request aborted');
+            abortError.name = 'AbortError';
+            throw abortError;
+          }
           const { done, value } = await readerStream.read();
           if (done) break;
           await fileHandle.write(value);
@@ -177,7 +223,8 @@ router.openapi(
         mime,
         startTime,
         clientIp,
-        userAgent
+        userAgent,
+        requestLifecycle.signal
       );
 
       metricsSnapshotService.recordUploadSuccess(stats.size);
@@ -193,6 +240,43 @@ router.openapi(
         // Ignore cleanup errors
       }
       
+      if (requestLifecycle.timedOut()) {
+        incrementRuntimeCounter('requestTimeoutTotal');
+        try {
+          await logService.logAction({
+            action: 'upload_request_timeout',
+            success: false,
+            details: {
+              alias,
+              timeoutMs: uploadRequestTimeoutMs,
+            },
+            note: 'Upload timed out before completion',
+            actor: 'upload-router',
+          });
+        } catch {
+          // best effort
+        }
+        return c.json({ error: 'Upload request timed out', code: 'REQUEST_TIMEOUT' }, 503);
+      }
+
+      if ((error as Error)?.name === 'AbortError' || c.req.raw.signal.aborted) {
+        incrementRuntimeCounter('requestAbortedTotal');
+        try {
+          await logService.logAction({
+            action: 'upload_request_aborted',
+            success: false,
+            details: {
+              alias,
+            },
+            note: 'Upload request was aborted by client or server timeout',
+            actor: 'upload-router',
+          });
+        } catch {
+          // best effort
+        }
+        return c.json({ error: 'Upload request aborted', code: 'REQUEST_ABORTED' }, 408);
+      }
+
       if (error instanceof UploadBusinessError) {
         return c.json({ error: error.message }, error.statusCode as 404);
       }
@@ -229,6 +313,8 @@ router.openapi(
         },
         500
       );
+    } finally {
+      requestLifecycle.cleanup();
     }
   }
 );

@@ -33,6 +33,39 @@ DATA STRUCTURE ErrorResponse:
 - code: Optional String (Error code for programmatic handling)
 ```
 
+### Overload / Backpressure Response
+
+Heavy endpoints (`/upload/*`, `/migration/*`) may reject requests under load.
+
+```
+DATA STRUCTURE OverloadErrorResponse extends ErrorResponse:
+- error: "Server overloaded. Please retry later."
+- code: "SERVER_OVERLOADED"
+- retryAfterMs: Number
+```
+
+Response behavior:
+
+- Status: `429` by default (configurable via `OVERLOAD_STATUS_CODE`)
+- Header: `Retry-After: <seconds>`
+
+### Payload Too Large Response (Migration)
+
+Migration endpoint validates request size before/after JSON parsing.
+
+```
+DATA STRUCTURE PayloadTooLargeResponse extends ErrorResponse:
+- error: "Payload too large"
+- code: "PAYLOAD_TOO_LARGE"
+```
+
+Response behavior:
+
+- Status: `413`
+- Triggered when:
+  - `Content-Length` (or proxy-provided length header) exceeds `MIGRATION_MAX_PAYLOAD_BYTES`
+  - `contentBase64.length` exceeds `MIGRATION_MAX_BASE64_CHARS`
+
 ### Timestamp Fields (All Entities)
 
 ```

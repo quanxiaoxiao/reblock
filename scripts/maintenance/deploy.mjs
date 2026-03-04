@@ -21,9 +21,10 @@
  *   - env: Object containing environment variables for .env file
  */
 
-import { execSync } from 'child_process';
-import { existsSync, statSync } from 'fs';
-import readline from 'readline';
+import { join } from 'node:path';
+import { execSync } from 'node:child_process';
+import { existsSync, statSync } from 'node:fs';
+import readline from 'node:readline';
 
 // ─── Colors & Formatting ───────────────────────────────────────────────────
 

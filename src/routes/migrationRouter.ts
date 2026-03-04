@@ -3,6 +3,8 @@ import type { Context } from 'hono';
 import crypto from 'crypto';
 import { env } from '../config/env';
 import { migrationService, MigrationError } from '../services/migrationService';
+import { logService } from '../services/logService';
+import { createAdmissionControl, incrementRuntimeCounter } from '../middleware/admissionControl';
 
 // Schema definitions
 const ImportResourceSchema = z.object({
@@ -56,6 +58,36 @@ const ErrorResponseSchema = z.object({
 
 // Create router
 const router = new OpenAPIHono();
+const migrationRequestTimeoutMs = 60_000;
+
+function createRequestController(rawSignal: AbortSignal, timeoutMs: number): {
+  signal: AbortSignal;
+  timedOut: () => boolean;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  let isTimedOut = false;
+
+  const timeout = setTimeout(() => {
+    isTimedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  const onAbort = () => {
+    controller.abort();
+  };
+
+  rawSignal.addEventListener('abort', onAbort, { once: true });
+
+  return {
+    signal: controller.signal,
+    timedOut: () => isTimedOut,
+    cleanup: () => {
+      clearTimeout(timeout);
+      rawSignal.removeEventListener('abort', onAbort);
+    },
+  };
+}
 
 // Authentication middleware
 async function migrationAuthMiddleware(c: Context, next: () => Promise<void>) {
@@ -75,6 +107,13 @@ async function migrationAuthMiddleware(c: Context, next: () => Promise<void>) {
 
 // Apply auth middleware to all routes
 router.use('*', migrationAuthMiddleware);
+router.use('*', createAdmissionControl({
+  name: 'migration',
+  maxInflight: env.MIGRATION_MAX_INFLIGHT,
+  queueMax: env.MIGRATION_QUEUE_MAX,
+  queueTimeoutMs: env.MIGRATION_QUEUE_TIMEOUT_MS,
+  overloadStatusCode: env.OVERLOAD_STATUS_CODE,
+}));
 
 // POST /migration/resources/:legacyId
 router.openapi(
@@ -172,14 +211,58 @@ router.openapi(
     },
   }),
   async (c: Context) => {
+    const requestLifecycle = createRequestController(c.req.raw.signal, migrationRequestTimeoutMs);
     try {
       const legacyId = c.req.param('legacyId');
+      const contentLengthHeader = c.req.header('content-length') || c.req.header('x-content-length');
+      const contentLength = contentLengthHeader ? Number.parseInt(contentLengthHeader, 10) : NaN;
+      if (Number.isFinite(contentLength) && contentLength > env.MIGRATION_MAX_PAYLOAD_BYTES) {
+        incrementRuntimeCounter('migrationPayloadTooLargeTotal');
+        await logService.logAction({
+          action: 'migration_payload_rejected',
+          success: false,
+          details: {
+            legacyId,
+            reason: 'content_length_limit',
+            contentLength,
+            maxPayloadBytes: env.MIGRATION_MAX_PAYLOAD_BYTES,
+          },
+          note: 'Migration payload rejected before JSON parsing',
+          actor: 'migration-router',
+        });
+        return c.json({
+          error: 'Payload too large',
+          code: 'PAYLOAD_TOO_LARGE',
+        }, 413);
+      }
       const body = await c.req.json();
+      if (typeof body?.contentBase64 !== 'string') {
+        return c.json({ error: 'contentBase64 is required', code: 'INVALID_CONTENT' }, 400);
+      }
+      if (body.contentBase64.length > env.MIGRATION_MAX_BASE64_CHARS) {
+        incrementRuntimeCounter('migrationPayloadTooLargeTotal');
+        await logService.logAction({
+          action: 'migration_payload_rejected',
+          success: false,
+          details: {
+            legacyId,
+            reason: 'base64_length_limit',
+            base64Length: body.contentBase64.length,
+            maxBase64Chars: env.MIGRATION_MAX_BASE64_CHARS,
+          },
+          note: 'Migration payload rejected after JSON parsing',
+          actor: 'migration-router',
+        });
+        return c.json({
+          error: 'Payload too large',
+          code: 'PAYLOAD_TOO_LARGE',
+        }, 413);
+      }
 
       const result = await migrationService.importResource({
         legacyId,
         ...body
-      });
+      }, requestLifecycle.signal);
 
       const statusCode = result.isNew ? 201 : 200;
 
@@ -193,6 +276,30 @@ router.openapi(
       }, statusCode);
 
     } catch (error) {
+      if (requestLifecycle.timedOut()) {
+        incrementRuntimeCounter('requestTimeoutTotal');
+        await logService.logAction({
+          action: 'migration_request_timeout',
+          success: false,
+          details: {
+            timeoutMs: migrationRequestTimeoutMs,
+          },
+          note: 'Migration request timed out before completion',
+          actor: 'migration-router',
+        });
+        return c.json({ error: 'Migration request timed out', code: 'REQUEST_TIMEOUT' }, 503);
+      }
+      if ((error as Error)?.name === 'AbortError' || c.req.raw.signal.aborted) {
+        incrementRuntimeCounter('requestAbortedTotal');
+        await logService.logAction({
+          action: 'migration_request_aborted',
+          success: false,
+          details: {},
+          note: 'Migration request was aborted by client or timeout',
+          actor: 'migration-router',
+        });
+        return c.json({ error: 'Migration request aborted', code: 'REQUEST_ABORTED' }, 408);
+      }
       if (error instanceof MigrationError) {
         return c.json({
           error: error.message,
@@ -218,6 +325,8 @@ router.openapi(
         },
         500
       );
+    } finally {
+      requestLifecycle.cleanup();
     }
   }
 );

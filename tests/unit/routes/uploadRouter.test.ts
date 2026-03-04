@@ -23,6 +23,10 @@ vi.mock('../../../src/services', () => ({
 vi.mock('../../../src/config/env', () => ({
   env: {
     STORAGE_TEMP_DIR: '/storage/temp',
+    UPLOAD_MAX_INFLIGHT: 4,
+    UPLOAD_QUEUE_MAX: 32,
+    UPLOAD_QUEUE_TIMEOUT_MS: 15000,
+    OVERLOAD_STATUS_CODE: 429,
   },
 }));
 

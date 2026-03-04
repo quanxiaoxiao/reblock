@@ -47,7 +47,8 @@ src/
 ├── config/
 │   └── env.ts                # Environment configuration
 ├── middleware/
-│   └── audit.ts              # Audit middleware
+│   ├── audit.ts              # Audit middleware
+│   └── admissionControl.ts   # Overload admission control + runtime counters
 ├── models/
 │   ├── index.ts              # Mongoose models (Block, Entry, Resource)
 │   └── logEntry.ts           # LogEntry model & types
@@ -95,11 +96,23 @@ blockRouter.ts
             └── Block (model)
 
 uploadRouter.ts
+    ├── admissionControl.ts
     └── uploadService.ts
             ├── Block (model)
             ├── Entry (model)
             ├── Resource (model)
             └── crypto.ts (utils)
+
+migrationRouter.ts
+    ├── admissionControl.ts
+    └── migrationService.ts
+            ├── Block (model)
+            ├── Entry (model)
+            ├── Resource (model)
+            └── crypto.ts (utils)
+
+metricsRouter.ts
+    └── admissionControl.ts (runtime snapshots)
 ```
 
 ### Services → Models
@@ -206,6 +219,32 @@ Throws: DownloadError on download failures
 Dependencies: [crypto]
 Uses: Block, Entry, Resource models
 Throws: UploadBusinessError on validation failures
+Notes:
+- Supports request abort signal for early cancellation
+- Does not run syncIndexes in request path
+```
+
+### MigrationService
+
+```
+Dependencies: [crypto, logService]
+Uses: Block, Entry, Resource models
+Throws: MigrationError on validation/conflict failures
+Notes:
+- Supports request abort signal for early cancellation
+- Does not run syncIndexes in request path
+```
+
+### AdmissionControl Middleware
+
+```
+Dependencies: [logService]
+Used by: uploadRouter, migrationRouter, metricsRouter
+Responsibilities:
+- Inflight gating
+- FIFO queue + timeout
+- Overload rejection response (SERVER_OVERLOADED + Retry-After)
+- Runtime counters for /metrics/runtime
 ```
 
 ### LogService

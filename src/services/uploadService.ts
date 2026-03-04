@@ -31,7 +31,8 @@ export interface IUploadService {
     mime?: string,
     startTime?: number,
     clientIp?: string,
-    userAgent?: string
+    userAgent?: string,
+    signal?: AbortSignal
   ): Promise<IResource>;
 }
 
@@ -46,29 +47,37 @@ export class UploadService implements IUploadService {
     mime?: string,
     startTime?: number,
     clientIp?: string,
-    userAgent?: string
+    userAgent?: string,
+    signal?: AbortSignal
   ): Promise<IResource> {
+    this.throwIfAborted(signal);
+
     // Step 1: Validate Entry and check upload config
     const entry = await this.validateEntryWithConfig(alias);
+    this.throwIfAborted(signal);
 
     // Step 2: Compute SHA256 of temp file
-    const sha256 = await this.computeSHA256(tempFilePath);
+    const sha256 = await this.computeSHA256(tempFilePath, signal);
+    this.throwIfAborted(signal);
 
     // Step 3: Get file size
     const stats = await fs.stat(tempFilePath);
     const size = stats.size;
+    this.throwIfAborted(signal);
 
     // Step 4: Validate file size against upload config
     this.validateFileSize(size, entry.uploadConfig);
 
     // Step 5: Detect MIME type using file-type library
     const detectedMime = await this.detectMimeType(tempFilePath);
+    this.throwIfAborted(signal);
 
     // Step 6: Validate MIME type against upload config
     this.validateMimeType(detectedMime, entry.uploadConfig);
 
     // Step 7: Block Deduplication
-    const block = await this.handleBlockDeduplication(sha256, size, tempFilePath);
+    const block = await this.handleBlockDeduplication(sha256, size, tempFilePath, signal);
+    this.throwIfAborted(signal);
 
     // Step 8: Calculate upload duration
     const uploadDuration = startTime ? Date.now() - startTime : undefined;
@@ -142,22 +151,24 @@ export class UploadService implements IUploadService {
     }
   }
 
-  private async computeSHA256(filePath: string): Promise<string> {
+  private async computeSHA256(filePath: string, signal?: AbortSignal): Promise<string> {
     const hash = crypto.createHash('sha256');
     const fileHandle = await fs.open(filePath, 'r');
-    
+
     try {
       const buffer = Buffer.alloc(65536); // 64KB chunks
       let bytesRead: number;
-      
+
       do {
+        this.throwIfAborted(signal);
         bytesRead = await fileHandle.read(buffer, 0, buffer.length, null)
           .then(result => result.bytesRead);
         if (bytesRead > 0) {
           hash.update(buffer.subarray(0, bytesRead));
         }
       } while (bytesRead > 0);
-      
+
+      this.throwIfAborted(signal);
       return hash.digest('hex');
     } finally {
       await fileHandle.close();
@@ -167,20 +178,19 @@ export class UploadService implements IUploadService {
   private async handleBlockDeduplication(
     sha256: string,
     size: number,
-    tempFilePath: string
+    tempFilePath: string,
+    signal?: AbortSignal
   ): Promise<IBlock> {
     const now = Date.now();
     const storageName = generateStorageName(sha256);
     const blockPath = this.getStoragePath(storageName);
-
-    // Ensure unique index exists (handles collection recreation by external tools)
-    await Block.syncIndexes({ background: false });
 
     let block: IBlock | null = null;
     let retryCount = 0;
     const maxRetries = 3;
 
     while (!block && retryCount < maxRetries) {
+      this.throwIfAborted(signal);
       try {
         // Step 1: Try to create a new block atomically
         // Unique index on sha256 (for non-invalid blocks) prevents duplicates
@@ -208,7 +218,7 @@ export class UploadService implements IUploadService {
         }
 
         if (!fileExists) {
-          await this.encryptAndMoveFile(tempFilePath, blockPath, iv, sha256, size);
+          await this.encryptAndMoveFile(tempFilePath, blockPath, iv, sha256, size, signal);
         } else {
           await fs.unlink(tempFilePath).catch(() => {});
         }
@@ -271,8 +281,10 @@ export class UploadService implements IUploadService {
     blockPath: string, 
     iv: Buffer,
     sha256?: string,
-    size?: number
+    size?: number,
+    signal?: AbortSignal
   ): Promise<void> {
+    this.throwIfAborted(signal);
     // Create encrypt stream
     const encryptStream = createEncryptStream(iv);
     
@@ -283,6 +295,7 @@ export class UploadService implements IUploadService {
     try {
       // Pipeline: read → encrypt → write
       await pipeline(readStream, encryptStream, writeStream);
+      this.throwIfAborted(signal);
     } catch (error) {
       // Log the encryption failure
       await logService.logIssue({
@@ -407,6 +420,14 @@ export class UploadService implements IUploadService {
         },
       });
       throw error;
+    }
+  }
+
+  private throwIfAborted(signal?: AbortSignal): void {
+    if (signal?.aborted) {
+      const abortError = new Error('Request aborted');
+      abortError.name = 'AbortError';
+      throw abortError;
     }
   }
 }

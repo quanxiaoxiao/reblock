@@ -46,6 +46,15 @@ const envSchema = z.object({
   CASCADE_DELETE_LOG_DAYS: z.string().default('30').transform(Number),
   METRICS_SNAPSHOT_INTERVAL_MINUTES: z.string().default('5').transform(Number),
   METRICS_WINDOW_MINUTES: z.string().default('5').transform(Number),
+  UPLOAD_MAX_INFLIGHT: z.string().default('4').transform(Number),
+  UPLOAD_QUEUE_MAX: z.string().default('32').transform(Number),
+  UPLOAD_QUEUE_TIMEOUT_MS: z.string().default('15000').transform(Number),
+  MIGRATION_MAX_INFLIGHT: z.string().default('1').transform(Number),
+  MIGRATION_QUEUE_MAX: z.string().default('8').transform(Number),
+  MIGRATION_QUEUE_TIMEOUT_MS: z.string().default('10000').transform(Number),
+  OVERLOAD_STATUS_CODE: z.string().default('429').transform(Number),
+  MIGRATION_MAX_PAYLOAD_BYTES: z.string().default('8388608').transform(Number),
+  MIGRATION_MAX_BASE64_CHARS: z.string().default('11184812').transform(Number),
 
   // Migration API configuration
   MIGRATION_API_ENABLED: z.string().default('false').transform(v => v === 'true'),
