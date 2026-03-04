@@ -18,7 +18,7 @@ const exec = promisify(require('child_process').exec);
  */
 
 describe('update-entry.mjs script', () => {
-  const scriptPath = join(process.cwd(), 'scripts', 'update-entry.mjs');
+  const scriptPath = join(process.cwd(), 'scripts', 'resource-mgmt', 'update-entry.mjs');
   
   // Verify script exists
   it('should exist', () => {
@@ -84,7 +84,7 @@ describe('update-entry.mjs script', () => {
  * node scripts/update-entry.mjs --alias=test --default
  */
 describe.skip('update-entry.mjs integration tests', () => {
-  const scriptPath = join(process.cwd(), 'scripts', 'update-entry.mjs');
+  const scriptPath = join(process.cwd(), 'scripts', 'resource-mgmt', 'update-entry.mjs');
   
   it('should parse --max-file-size correctly', async () => {
     try {
