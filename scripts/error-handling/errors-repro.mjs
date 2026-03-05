@@ -19,10 +19,8 @@ import { readFileSync, mkdirSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { spawn } from 'child_process';
 import {
-  c,
   logBanner,
   logSection,
-  logInfo,
   logSuccess,
   logError,
   spinner,

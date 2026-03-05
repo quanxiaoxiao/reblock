@@ -28,13 +28,9 @@ import {
   logSection,
   logInfo,
   logSuccess,
-  logWarn,
   logError,
   logDetail,
-  formatDuration,
   formatBytes,
-  logDivider,
-  spinner,
 } from '../utils/style.mjs';
 
 // Configuration
@@ -106,10 +102,6 @@ function error(message) {
 
 function info(message) {
   logDetail(message);
-}
-
-function section(title) {
-  logSection(title);
 }
 
 // Generate random file content

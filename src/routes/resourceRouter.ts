@@ -16,6 +16,7 @@ import { LogLevel, LogCategory, DataLossRisk } from '../models/logEntry';
  */
 function encodeContentDisposition(filename: string): string {
   // Check if filename contains non-ASCII characters
+  // eslint-disable-next-line no-control-regex
   if (/[^\x00-\x7F]/.test(filename)) {
     // Use RFC 5987 encoding: filename*=UTF-8''url-encoded-filename
     const encoded = encodeURIComponent(filename);

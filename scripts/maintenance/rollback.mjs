@@ -155,6 +155,7 @@ function printMainBanner(subtitle = '') {
   print(`  ${c.cyan}${box.dv}${c.reset}${' '.repeat(inner)}${c.cyan}${box.dv}${c.reset}`);
 
   const titleText = '🔄  Reblock Rollback';
+  // eslint-disable-next-line no-control-regex
   const titlePad  = inner - titleText.replace(/\x1b\[[^m]*m/g,'').replace(/[^\x00-\x7F]/g, '  ').length - 4;
   print(`  ${c.cyan}${box.dv}${c.reset}  ${c.bold}${c.white}${titleText}${c.reset}${' '.repeat(titlePad)}  ${c.cyan}${box.dv}${c.reset}`);
 
@@ -195,7 +196,7 @@ function exec(command, options = {}) {
   try {
     return execSync(command, { encoding: 'utf-8', stdio: 'pipe', ...options });
   } catch (error) {
-    throw new Error(`Command failed: ${command}\n${error.stderr || error.message}`);
+    throw new Error(`Command failed: ${command}\n${error.stderr || error.message}`, { cause: error });
   }
 }
 
@@ -569,7 +570,7 @@ async function cleanupVersions(config, versions) {
     return;
   }
 
-  let toDelete = [];
+  let toDelete;
   if (answer.toLowerCase() === 'all') {
     toDelete = deletableVersions;
   } else {

@@ -191,7 +191,8 @@ function loadImageIds() {
  */
 async function countResources() {
   let count = 0;
-  for await (const _ of streamJsonObjects(RESOURCES_FILE)) count++;
+  // eslint-disable-next-line no-unused-vars
+  for await (const _unused of streamJsonObjects(RESOURCES_FILE)) count++;
   return count;
 }
 

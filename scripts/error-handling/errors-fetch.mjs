@@ -17,7 +17,6 @@ import { resolve } from 'path';
 import {
   c,
   logBanner,
-  logSection,
   logInfo,
   logSuccess,
   logError,

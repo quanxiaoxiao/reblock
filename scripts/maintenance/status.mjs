@@ -252,7 +252,7 @@ async function collectStatus(config) {
     }
 
     // OS & Kernel info
-    const osRelease = exec(`${sshBaseCmd} 'cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d \\\"'`);
+    const osRelease = exec(`${sshBaseCmd} 'cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d "'`);
     const kernel    = exec(`${sshBaseCmd} 'uname -r'`);
     status.system.os     = osRelease?.trim() || 'unknown';
     status.system.kernel = kernel?.trim() || 'unknown';

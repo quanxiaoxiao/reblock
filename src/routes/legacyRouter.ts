@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { resourceService } from '../services';
 import { blockService } from '../services/blockService';
-import { parseRange, handleResourceDownload } from './resourceRouter';
+import { handleResourceDownload } from './resourceRouter';
 
 const ErrorSchema = z.object({
   error: z.string(),

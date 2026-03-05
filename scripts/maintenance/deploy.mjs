@@ -125,7 +125,7 @@ function exec(command, options = {}) {
   try {
     return execSync(command, { encoding: 'utf-8', stdio: 'pipe', ...options });
   } catch (error) {
-    throw new Error(`Command failed: ${command}\n${error.stderr || error.message}`);
+    throw new Error(`Command failed: ${command}\n${error.stderr || error.message}`, { cause: error });
   }
 }
 
@@ -244,7 +244,7 @@ async function deploy() {
   try {
     const result = exec(`${sshBaseCmd} 'test -f ${remotePath}/.env && echo "exists" || echo "not found"'`).trim();
     envExists = result === 'exists';
-  } catch (_) {
+  } catch {
     // Directory might not exist yet
   }
 

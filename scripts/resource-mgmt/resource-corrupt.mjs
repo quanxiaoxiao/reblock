@@ -32,7 +32,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { resolve, join, dirname } from 'path';
 import mongoose from 'mongoose';
-import { createHmac, createDecipheriv } from 'crypto';
+import { createHmac } from 'crypto';
 
 // Load environment variables
 function loadEnv() {
@@ -314,14 +314,6 @@ function getStoragePath(sha256) {
   const secondChar = storageName.substring(2, 3);
   const relativePath = `${prefix1}/${secondChar}${storageName}`;
   return join(CONFIG.BLOCKS_DIR, relativePath);
-}
-
-// Generate IV from MongoDB ObjectId (12 bytes + 4 zero bytes padding = 16 bytes for AES)
-function generateIV(objectId) {
-  const objectIdBuffer = Buffer.isBuffer(objectId)
-    ? objectId
-    : Buffer.from(objectId.toString(), 'hex');
-  return Buffer.concat([objectIdBuffer, Buffer.from([0, 0, 0, 0])]);
 }
 
 // Corruption functions

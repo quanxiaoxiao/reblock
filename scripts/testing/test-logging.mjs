@@ -19,7 +19,6 @@ import { createReadStream } from 'fs';
 import { resolve, dirname } from 'path';
 import mongoose from 'mongoose';
 import {
-  c,
   logBanner,
   logSection,
   logInfo,
@@ -27,7 +26,6 @@ import {
   logWarn,
   logError,
   logDetail,
-  logDivider,
   spinner,
 } from '../utils/style.mjs';
 

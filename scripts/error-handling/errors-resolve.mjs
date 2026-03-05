@@ -12,7 +12,6 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import {
-  c,
   logBanner,
   logInfo,
   logSuccess,

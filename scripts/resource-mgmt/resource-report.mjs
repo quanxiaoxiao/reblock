@@ -400,13 +400,13 @@ function printTextReport({ resource, entry, block, health, anomalies, logs, summ
   }
 
   section('⚠️  Health Check Results');
-  health.resourceExists ? ok('Resource exists in database') : fail('Resource not found');
-  health.blockExists    ? ok('Block association valid')     : fail('Block association broken - resource is orphaned');
-  health.fileExists     ? ok('Physical file exists')        : fail('Physical file missing');
+  void (health.resourceExists ? ok('Resource exists in database') : fail('Resource not found'));
+  void (health.blockExists    ? ok('Block association valid')     : fail('Block association broken - resource is orphaned'));
+  void (health.fileExists     ? ok('Physical file exists')        : fail('Physical file missing'));
 
-  health.linkCountMatch
+  void (health.linkCountMatch
     ? ok(`Link count correct (${block.linkCount}/${health.actualRefCount})`)
-    : warn(`Link count mismatch: expected ${block.linkCount}, actual ${health.actualRefCount}`);
+    : warn(`Link count mismatch: expected ${block.linkCount}, actual ${health.actualRefCount}`));
 
   if (health.sizeMatch) {
     ok('File size matches');
@@ -418,7 +418,7 @@ function printTextReport({ resource, entry, block, health, anomalies, logs, summ
   else if (health.sha256Match === false) fail('SHA256 hash mismatch - file corrupted!');
   else                                   info('SHA256 check skipped (large file)');
 
-  health.blockValid ? ok('Block is valid (not deleted)') : warn('Block is soft-deleted');
+  void (health.blockValid ? ok('Block is valid (not deleted)') : warn('Block is soft-deleted'));
 
   section('🔍 Anomaly Detection');
   if (anomalies.length === 0) {
