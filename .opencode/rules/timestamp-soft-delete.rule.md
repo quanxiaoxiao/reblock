@@ -16,10 +16,15 @@ ALL time fields MUST use:
 
 Forbidden:
 
-❌ Date type
+❌ Date type (exception: TTL fields, see below)
 ❌ ISO string
 ❌ mongoose timestamps option
 ❌ mixed formats
+
+**Exception — TTL fields:**
+MongoDB TTL indexes ONLY work on `Date` type fields. Therefore, fields used for TTL
+automatic cleanup (e.g., `expiresAt` on LogEntry) **MUST** use `type: Date`.
+This is the only permitted use of `Date` type in the codebase.
 
 Example:
 
@@ -259,7 +264,7 @@ These fields are server-controlled.
 
 OpenCode MUST report violation if:
 
-* Date type timestamp detected
+* Date type timestamp detected (exception: TTL fields like `expiresAt`)
 * mongoose timestamps enabled
 * deleteOne/remove used
 * createdAt modified in update

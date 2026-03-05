@@ -57,6 +57,10 @@ src/
 │   ├── resourceRouter.ts     # /resources endpoints
 │   ├── blockRouter.ts        # /blocks endpoints
 │   ├── uploadRouter.ts       # /upload endpoints
+│   ├── errorRouter.ts        # /errors endpoints (log issue management)
+│   ├── migrationRouter.ts    # /migration endpoints (legacy import)
+│   ├── metricsRouter.ts      # /metrics endpoints (runtime snapshots)
+│   ├── legacyRouter.ts       # Legacy compatibility endpoints
 │   └── middlewares/
 │       └── validate.ts        # Zod validation middleware
 ├── services/
@@ -68,8 +72,12 @@ src/
 │   ├── logService.ts         # Logging service
 │   ├── auditService.ts       # Audit logging
 │   └── types.ts              # Shared service types
-└── utils/
-    └── crypto.ts             # Encryption/decryption utilities
+├── utils/
+│   ├── crypto.ts             # Encryption/decryption utilities
+│   ├── transaction.ts        # MongoDB transaction support utilities
+│   └── pagination.ts         # Pagination validation & normalization
+└── types/
+    └── hono.d.ts             # Hono framework type extensions
 ```
 
 ---
@@ -208,15 +216,18 @@ Throws: BusinessError on conflicts
 ### ResourceService
 
 ```
-Dependencies: [logService, crypto]
+Dependencies: [logService, crypto, transaction]
 Uses: Resource, Block models
 Throws: DownloadError on download failures
+Notes:
+- delete() uses MongoDB transactions for atomicity
+- downloadMeta() provides lightweight metadata for Range pre-checks
 ```
 
 ### UploadService
 
 ```
-Dependencies: [crypto]
+Dependencies: [crypto, logService]
 Uses: Block, Entry, Resource models
 Throws: UploadBusinessError on validation failures
 Notes:
@@ -264,6 +275,7 @@ Uses: LogEntry model, fs/promises for JSONL
 // No external dependencies
 // Uses: Node.js built-in crypto module
 // Exports:
+- getEncryptionKey(): Buffer              // Cached parsed encryption key
 - generateStorageName(sha256: string): string
 - generateIV(blockId: ObjectId): Buffer
 - createEncryptStream(iv: Buffer): Transform

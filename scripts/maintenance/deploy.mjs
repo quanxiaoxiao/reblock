@@ -25,6 +25,7 @@ import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import readline from 'node:readline';
+import { randomBytes } from 'node:crypto';
 
 // ─── Colors & Formatting ───────────────────────────────────────────────────
 
@@ -333,14 +334,78 @@ async function deploy() {
       // Auto-generate tokens if needed
       const finalEnvConfig = { ...envConfig };
       
+      // Helper functions for secure token generation
+      const generateEncryptionKey = () => {
+        // 32 bytes = 256 bits for AES-256
+        return randomBytes(32).toString('base64');
+      };
+      
+      const generateSecureToken = (length = 64) => {
+        // Generate hex string of specified length
+        return randomBytes(length / 2).toString('hex');
+      };
+      
+      // Generate ENCRYPTION_KEY if not provided or invalid
+      const existingKey = finalEnvConfig.ENCRYPTION_KEY;
+      const isValidBase64Key = (key) => {
+        if (!key || typeof key !== 'string') return false;
+        try {
+          const decoded = Buffer.from(key, 'base64');
+          return decoded.length === 32;
+        } catch {
+          return false;
+        }
+      };
+      
+      if (!isValidBase64Key(existingKey)) {
+        finalEnvConfig.ENCRYPTION_KEY = generateEncryptionKey();
+        generatedTokens.push({ 
+          name: 'ENCRYPTION_KEY', 
+          value: finalEnvConfig.ENCRYPTION_KEY,
+          critical: true,
+          description: '32-byte base64 key for data encryption'
+        });
+      }
+      
+      // Validate required sensitive configuration
+      const requiredVars = [
+        { key: 'MONGO_PASSWORD', description: 'MongoDB password' },
+      ];
+      
+      const missingRequired = requiredVars.filter(({ key }) => {
+        const value = finalEnvConfig[key];
+        return !value || (typeof value === 'string' && value.trim() === '');
+      });
+      
+      if (missingRequired.length > 0) {
+        const missingList = missingRequired.map(({ key, description }) => `${key} (${description})`).join(', ');
+        throw new Error(
+          `Missing required configuration in deploy.config.mjs: ${missingList}\n\n` +
+          `Please add these values to your deploy.config.mjs env configuration.\n` +
+          `Note: Do not commit sensitive values to version control.`
+        );
+      }
+      
       // Generate MIGRATION_API_TOKEN if enabled but not provided
-      if (finalEnvConfig.MIGRATION_API_ENABLED === true && finalEnvConfig.MIGRATION_API_TOKEN) {
-        generatedTokens.push({ name: 'MIGRATION_API_TOKEN', value: finalEnvConfig.MIGRATION_API_TOKEN });
+      if (finalEnvConfig.MIGRATION_API_ENABLED === true && !finalEnvConfig.MIGRATION_API_TOKEN) {
+        finalEnvConfig.MIGRATION_API_TOKEN = generateSecureToken(64);
+        generatedTokens.push({ 
+          name: 'MIGRATION_API_TOKEN', 
+          value: finalEnvConfig.MIGRATION_API_TOKEN,
+          critical: false,
+          description: '64-char hex token for migration API'
+        });
       }
       
       // Generate ERRORS_API_TOKEN if not provided
-      if (finalEnvConfig.ERRORS_API_TOKEN) {
-        generatedTokens.push({ name: 'ERRORS_API_TOKEN', value: finalEnvConfig.ERRORS_API_TOKEN });
+      if (!finalEnvConfig.ERRORS_API_TOKEN) {
+        finalEnvConfig.ERRORS_API_TOKEN = generateSecureToken(64);
+        generatedTokens.push({ 
+          name: 'ERRORS_API_TOKEN', 
+          value: finalEnvConfig.ERRORS_API_TOKEN,
+          critical: false,
+          description: '64-char hex token for errors API'
+        });
       }
       
       // Add default LOG_* values if not provided
@@ -392,7 +457,8 @@ async function deploy() {
         `  cat > ${remotePath}/.env << 'ENVFILE'`,
         envContent,
         'ENVFILE',
-        `  echo "   › .env generated"`,
+        `  chmod 600 ${remotePath}/.env`,
+        `  echo "   › .env generated (permissions: 600)"`,
         `fi`,
         '',
       );
@@ -537,12 +603,36 @@ async function deploy() {
       console.log(`\n${DIVIDER}`);
       console.log(`   ${c.bold}${c.white}Auto-Generated Tokens${c.reset}`);
       console.log(DIVIDER);
-      for (const token of generatedTokens) {
-        const maskedValue = token.value.substring(0, 8) + '...' + token.value.substring(token.value.length - 8);
-        logInfo(token.name, `${c.yellow}${maskedValue}${c.reset}`);
-        logDetail(`Full value: ${token.value}`);
+      
+      // Show critical warning first
+      const criticalTokens = generatedTokens.filter(t => t.critical);
+      if (criticalTokens.length > 0) {
+        console.log(`\n   ${c.red}${c.bold}⚠️  CRITICAL: Save these keys immediately!${c.reset}`);
+        console.log(`   ${c.red}   Loss of encryption key will result in permanent data loss.${c.reset}\n`);
+        
+        for (const token of criticalTokens) {
+          logInfo(token.name, `${c.yellow}${token.value}${c.reset}`);
+          if (token.description) {
+            logDetail(token.description);
+          }
+        }
       }
-      console.log(`${c.gray}   Save these tokens for API authentication${c.reset}`);
+      
+      // Show other tokens
+      const regularTokens = generatedTokens.filter(t => !t.critical);
+      if (regularTokens.length > 0) {
+        console.log(`\n   ${c.bold}API Tokens:${c.reset}`);
+        for (const token of regularTokens) {
+          const maskedValue = token.value.substring(0, 8) + '...' + token.value.substring(token.value.length - 8);
+          logInfo(token.name, `${c.yellow}${maskedValue}${c.reset}`);
+          logDetail(`Full value: ${token.value}`);
+          if (token.description) {
+            logDetail(token.description);
+          }
+        }
+      }
+      
+      console.log(`\n   ${c.gray}Save these values to your password manager or secure vault.${c.reset}`);
       console.log(DIVIDER);
     }
 

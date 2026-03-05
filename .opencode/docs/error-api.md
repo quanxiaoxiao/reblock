@@ -41,6 +41,20 @@ Error API provides 500 error query and management, supporting AI-assisted debugg
 
 ---
 
+## Authentication
+
+All `/errors` endpoints require a valid API token. Token is provided via one of:
+- `x-errors-token` header
+- `x-migration-token` header
+- `Authorization: Bearer <token>` header
+
+Token comparison uses `crypto.timingSafeEqual()` to prevent timing attacks.
+
+If no token is configured on the server (`ERRORS_API_TOKEN` and `MIGRATION_API_TOKEN` are both unset),
+all requests to `/errors` endpoints are rejected with **403 Forbidden**.
+
+---
+
 ## API Endpoints
 
 | Method | Path | Description |

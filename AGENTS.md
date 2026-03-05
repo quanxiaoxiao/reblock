@@ -156,7 +156,7 @@ async checkDuplicate(category: LogCategory, blockId: string, sinceHours?: number
 
 // Query methods
 async findByBlockId(blockId: string, limit?: number): Promise<ILogEntry[]>;
-async findOpenIssues(category?: LogCategory): Promise<ILogEntry[]>;
+async findOpenIssues(category?: LogCategory, limit?: number): Promise<ILogEntry[]>; // default 200, max 1000
 async findRecent(days: number, filter?: LogFilter): Promise<ILogEntry[]>;
 
 // Status management
@@ -193,17 +193,17 @@ Automatically logs all detected issues:
 - Sets appropriate severity levels
 - Includes full context (script version, environment, etc.)
 
-### Cleanup Script (P1)
+### Cleanup Script
 
-Will log:
+Logs:
 - Actions performed (soft delete, linkCount fix)
 - Before/after state snapshots
 - Success/failure status
 - Resolution notes for original issues
 
-### Runtime Services (P2)
+### Runtime Services
 
-ResourceService and UploadService will log:
+ResourceService and UploadService log:
 - Data inconsistency errors
 - File access errors
 - Download failures with request context
@@ -317,7 +317,7 @@ df.groupby([df['datetime'].dt.date, 'category']).size().unstack().plot()
 - [x] P1: Log analysis tools
 - [x] P2: Runtime service integration (ResourceService, UploadService)
 - [x] P2: Resource block history & rollback
-- [ ] P2: Archive automation
+- [x] P2: Archive automation
 - [ ] P2: Log restore scripts
 
 ## Configuration

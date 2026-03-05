@@ -153,13 +153,11 @@ function getStoragePath(sha256) {
 
 ### Validation
 
-Scripts and services MUST validate `ENCRYPTION_KEY` is configured:
-
-```typescript
-if (!CONFIG.ENCRYPTION_KEY) {
-  throw new Error('ENCRYPTION_KEY not configured');
-}
-```
+`ENCRYPTION_KEY` is validated at startup via Zod schema in `env.ts`:
+- Must be valid base64 encoding
+- Must decode to exactly 32 bytes (256 bits)
+- In `production` environment, the default test key is rejected
+- Parsed key is cached after first use (`getEncryptionKey()` in `crypto.ts`)
 
 ---
 

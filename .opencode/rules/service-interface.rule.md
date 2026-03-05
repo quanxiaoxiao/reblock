@@ -236,6 +236,7 @@ HTTP 409 Conflict
 | `list(filter, limit, offset)` | List resources with pagination |
 | `delete(id)` | Soft delete a resource |
 | `download(id, range)` | Prepare resource for download |
+| `downloadMeta(id)` | Get resource download metadata (totalSize, mime, filename) without stream setup — used for Range pre-checks |
 
 ### Key Behaviors
 
@@ -348,8 +349,8 @@ HTTP 204 No Content
 ### Upload Process Flow
 
 1. Validate entry exists and is not read-only
-2. Compute SHA256 hash of file
-3. Validate file size against upload config
+2. Validate file size against upload config (cheap — early rejection for oversized files)
+3. Compute SHA256 hash of file (expensive — only after size check passes)
 4. Detect MIME type
 5. Validate MIME type against upload config
 6. Handle block deduplication (reuse or create new)
@@ -439,7 +440,7 @@ HTTP 415 Unsupported Media Type
 | `logCleanupAction(params)` | Log a cleanup action |
 | `checkDuplicate(category, blockId, sinceHours)` | Check for duplicate issues |
 | `findByBlockId(blockId, limit)` | Find logs by block ID |
-| `findOpenIssues(category)` | Find open issues |
+| `findOpenIssues(category?, limit?)` | Find open issues (default limit: 200, max: 1000) |
 | `findRecent(days, filter)` | Find recent logs |
 | `markResolved(logId, resolution, resolvedBy)` | Mark issue as resolved |
 | `markAcknowledged(logId, note)` | Mark issue as acknowledged |

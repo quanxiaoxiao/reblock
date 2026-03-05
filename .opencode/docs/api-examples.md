@@ -6,12 +6,43 @@ This document provides complete request/response examples for all Reblock API en
 
 ## Table of Contents
 
-1. [Entry API Examples](#entry-api-examples)
-2. [Resource API Examples](#resource-api-examples)
-3. [Block API Examples](#block-api-examples)
-4. [Upload API Examples](#upload-api-examples)
-5. [Overload Protection & Metrics Examples](#overload-protection--metrics-examples)
-6. [Error API Examples](#error-api-examples)
+1. [Health Check](#health-check)
+2. [Entry API Examples](#entry-api-examples)
+3. [Resource API Examples](#resource-api-examples)
+4. [Block API Examples](#block-api-examples)
+5. [Upload API Examples](#upload-api-examples)
+6. [Overload Protection & Metrics Examples](#overload-protection--metrics-examples)
+7. [Error API Examples](#error-api-examples)
+
+---
+
+## Health Check
+
+### GET /health (Healthy)
+
+```bash
+curl http://localhost:3000/health
+
+# Response (200):
+{
+  "status": "healthy",
+  "timestamp": "2026-03-05T00:00:00.000Z",
+  "database": "connected"
+}
+```
+
+### GET /health (Database disconnected)
+
+```bash
+curl http://localhost:3000/health
+
+# Response (503):
+{
+  "status": "degraded",
+  "timestamp": "2026-03-05T00:00:00.000Z",
+  "database": "disconnected"
+}
+```
 
 ---
 
@@ -571,12 +602,16 @@ curl -X GET "http://localhost:3000/metrics/runtime"
 
 ## Error API Examples
 
+> **Note:** All `/errors` endpoints require authentication via `x-errors-token` header.
+> If no token is configured on the server, all requests return **403 Forbidden**.
+
 ### Acknowledge an Issue
 
 **Request:**
 ```bash
 curl -X POST "http://localhost:3000/errors/60d21b4667d0d8992e610c93/acknowledge" \
   -H "Content-Type: application/json" \
+  -H "x-errors-token: your-api-token-here" \
   -d '{
     "note": "Confirmed this is a valid orphaned block",
     "changedBy": "admin-123"

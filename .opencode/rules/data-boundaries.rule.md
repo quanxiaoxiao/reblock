@@ -401,14 +401,12 @@ END IF
 | Type | String (Base64 encoded) |
 | Decoded Length | Exactly `32` bytes (256 bits) |
 | Format | Base64 |
+| Production | Must NOT be the default test key |
 
-**Validation:**
-```typescript
-const keyBuffer = Buffer.from(encryptionKey, 'base64');
-if (keyBuffer.length !== 32) {
-  throw new Error('Encryption key must be 32 bytes (256 bits)');
-}
-```
+**Validation (via Zod schema at startup):**
+- Decoded from base64 and verified to be exactly 32 bytes
+- In `production` environment, the well-known default test key is rejected
+- Parsed key is cached after first use to avoid repeated base64 decoding
 
 ### LOG_TTL_DAYS
 
@@ -419,6 +417,14 @@ if (keyBuffer.length !== 32) {
 | Maximum | `365` |
 | Default | `90` |
 | Integer | Yes |
+
+### Numeric Environment Variable Validation
+
+All numeric environment variables (ports, timeouts, limits, etc.) are validated
+via Zod `.pipe(z.number().int().positive())` at startup, ensuring:
+- Parsed value is a valid number (not `NaN`)
+- Value is an integer (not float)
+- Value is positive (> 0)
 
 ---
 

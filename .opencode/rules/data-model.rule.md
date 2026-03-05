@@ -58,6 +58,7 @@ All entities follow these rules:
 ### Constraints
 
 - `sha256` must be unique among non-deleted blocks (via partial unique index)
+- `sha256` is **immutable after creation** — cannot be updated via API (enforced by Zod schema)
 - `linkCount` >= 0 (should never go negative)
 - When `linkCount` = 0 and `isInvalid` = false, block is "orphaned"
 
@@ -201,7 +202,8 @@ DATA STRUCTURE Resource:
 
 - `block` is required and must reference a valid Block
 - `entry` is required and must reference a valid Entry
-- When deleting, must decrement linked Block's `linkCount`
+- `block` and `entry` are **immutable after creation** — cannot be updated via the standard update API (use block swap endpoint instead)
+- When deleting, must decrement linked Block's `linkCount` (within a transaction)
 
 ### Relationships
 
@@ -257,7 +259,7 @@ DATA STRUCTURE LogEntry:
 - resolution: Optional String (Resolution description)
 - resolvedBy: Optional String (Resolver identity)
 - createdAt: Number (Entity creation timestamp)
-- expiresAt: Number (Expiration timestamp, TTL: 90 days)
+- expiresAt: Date (Expiration date, TTL: 90 days — must be Date type for MongoDB TTL index)
 ```
 
 ### Enums
@@ -312,7 +314,7 @@ ENUM DataLossRisk:
 | `resolution`     | string      | -        | Resolution description                 |
 | `resolvedBy`     | string      | -        | Who resolved the issue                |
 | `createdAt`      | number      | ✅ Auto  | Creation timestamp                    |
-| `expiresAt`      | number      | ✅ Auto  | TTL expiration (90 days)              |
+| `expiresAt`      | Date        | ✅ Auto  | TTL expiration (90 days, must be Date for MongoDB TTL index) |
 
 ### Indexes
 

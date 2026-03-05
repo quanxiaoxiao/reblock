@@ -14,7 +14,7 @@ This document defines the error handling patterns for the Reblock service.
 | 206         | Partial Content                | Range request successful (download)                   |
 | 400         | Client Error                   | Validation error, bad request (includes file size, MIME type) |
 | 401         | Unauthorized                   | Invalid or missing authentication token               |
-| 403         | Forbidden                      | Read-only, access denied                              |
+| 403         | Forbidden                      | Read-only, access denied, or API token not configured |
 | 404         | Not Found                      | Resource not found                                    |
 | 409         | Conflict                       | Duplicate alias, constraint violation                 |
 | 416         | Range Not Satisfiable          | Invalid byte range for download                       |

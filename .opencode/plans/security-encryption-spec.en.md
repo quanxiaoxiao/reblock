@@ -72,14 +72,15 @@ def get_file_path(storage_name):
 **Runtime Validation**:
 - On startup, verify ENCRYPTION_KEY exists and has the correct length (32 decoded bytes)
 - If key is absent or malformed, throw an exception and terminate service startup
-- A default key cannot be used as this compromises security
+- In `production` environment, the default test key is rejected at startup
+- In `development`/`test` environments, the default test key is allowed for convenience
 
 **Environment Configuration Requirements**:
 - Must use base64 encoding
 - Must be 32 bytes in length (when decoded, ~44 characters in encoded string plus padding)
 - Must be stored in secure environment variables rather than in code
 
-**Security Validation Flow**:
+**Security Validation Flow** (implemented via Zod schema in `env.ts`):
 ```pseudo
 def check_encryption_key():
     if env.ENCRYPTION_KEY is None or env.ENCRYPTION_KEY == "":
@@ -89,7 +90,10 @@ def check_encryption_key():
     if len(key_bytes) != 32:
         raise Exception(f"Invalid encryption key length: {len(key_bytes)} bytes, expected 32 bytes")
     
-    return key_bytes
+    if env.NODE_ENV == "production" and env.ENCRYPTION_KEY == DEFAULT_TEST_KEY:
+        raise Exception("Default test encryption key must not be used in production")
+    
+    return key_bytes  # cached after first parse via getEncryptionKey()
 ```
 
 ## 4. Encrypted Range Request Support

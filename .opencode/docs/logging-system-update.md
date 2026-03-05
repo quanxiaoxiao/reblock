@@ -57,6 +57,7 @@ schedule('0 3 * * *', async () => {
 **API Addition**:
 ```typescript
 // LogService.resolveIssuesByBlockId()
+// Uses MongoDB updateMany for true bulk update (not per-document save)
 async resolveIssuesByBlockId(
   blockId: string,
   category: LogCategory,
@@ -64,6 +65,8 @@ async resolveIssuesByBlockId(
   resolvedBy: string = 'cleanup-script'
 ): Promise<{ resolved: number; errors: string[] }>
 ```
+
+**Note**: `logIssue()` uses a single `save()` operation by pre-computing `fileLocation` before the initial save, avoiding the previous double-save pattern.
 
 **Execution Log Example**:
 ```

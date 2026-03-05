@@ -33,11 +33,11 @@ When a file is uploaded to an entry:
    └─► Check readOnly flag
        └─► If true, return 403 "Entry is read-only"
 
-2. Compute file SHA256
-
-3. Get file size
+2. Get file size (cheap check first)
    └─► Validate against maxFileSize
        └─► If exceeded, return 400 "File size exceeds limit"
+
+3. Compute file SHA256 (expensive — only after size check passes)
 
 4. Detect actual MIME type using file-type library
    └─► Validates against allowedMimeTypes

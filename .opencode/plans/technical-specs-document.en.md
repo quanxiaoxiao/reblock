@@ -123,17 +123,17 @@ Uploads content to an entry designated by alias and performs content deduplicati
 
 **Implementation Requirements**:
 1. Locate the entry by `:alias` matching criteria of `isInvalid != true` (only valid entries)
-2. Calculate SHA-256 hash of input payload
-3. Execute validation checks:
-   - Compare file size against `uploadConfig.maxFileSize` constraint
+2. Validate file size against `uploadConfig.maxFileSize` constraint (cheap — early rejection)
+3. Calculate SHA-256 hash of input payload (expensive — only after size check passes)
+4. Execute remaining validation checks:
    - Determine MIME type vs validate against `uploadConfig.allowedMimeTypes` list
    - Check entry is not marked `uploadConfig.readOnly` mode
-4. Conduct lookup for existing block with the same calculated SHA-256 hash (where `isInvalid = false`)
-5. On match: increment block's linkCount without storing duplicate
-6. On no match: encrypt content with AES-256-CTR algorithm and store to secure location
-7. Create new Resource record linking the block and entry IDs
-8. Utilize HMAC-SHA256 of `sha256` digest to compute filesystem storage path
-9. Respond with resource entity containing full upload details and metadata
+5. Conduct lookup for existing block with the same calculated SHA-256 hash (where `isInvalid = false`)
+6. On match: increment block's linkCount without storing duplicate
+7. On no match: encrypt content with AES-256-CTR algorithm and store to secure location
+8. Create new Resource record linking the block and entry IDs
+9. Utilize HMAC-SHA256 of `sha256` digest to compute filesystem storage path
+10. Respond with resource entity containing full upload details and metadata
 
 #### GET `/resources/:id/history`
 Returns the historical record of block association changes for a specific resource

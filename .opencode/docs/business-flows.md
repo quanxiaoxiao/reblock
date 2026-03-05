@@ -106,11 +106,12 @@ This document describes the key business flows in the Reblock service.
 │  │     ├─ Check not soft-deleted                                    │   │
 │  │     └─ Check not read-only                                        │   │
 │  │                                                                    │   │
-│  │  2. computeSHA256(tempFilePath)                                   │   │
-│  │     └─ Stream file through SHA256 hasher                         │   │
+│  │  2. validateFileSize(size, uploadConfig)                         │   │
+│  │     └─ Throw if exceeds maxFileSize (cheap — early rejection)   │   │
 │  │                                                                    │   │
-│  │  3. validateFileSize(size, uploadConfig)                         │   │
-│  │     └─ Throw if exceeds maxFileSize                               │   │
+│  │  3. computeSHA256(tempFilePath)                                   │   │
+│  │     └─ Stream file through SHA256 hasher (expensive — after      │   │
+│  │        size check passes)                                          │   │
 │  │                                                                    │   │
 │  │  4. detectMimeType(tempFilePath)                                 │   │
 │  │     └─ Use file-type library                                      │   │
@@ -214,8 +215,10 @@ async handleBlockDeduplication(sha256: string, size: number, tempFilePath: strin
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │ resourceRouter.download()                                         │   │
 │  │   • Extract resource ID from params                              │   │
-│  │   • Parse Range header if present                                │   │
-│  │   • Call resourceService.download()                             │   │
+│  │   • If Range header present:                                     │   │
+│  │     - Call resourceService.downloadMeta() for totalSize          │   │
+│  │     - Parse Range header against totalSize                       │   │
+│  │   • Call resourceService.download() with parsed range            │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 │    │                                                                     │
 │    ▼                                                                     │
@@ -370,18 +373,23 @@ router.get('/:id/download', async (c) => {
 │    │  1. Find resource (filter: isInvalid != true)                     │
 │    │     └─ Return null if not found                                    │
 │    │                                                                     │
-│    │  2. Decrement block linkCount                                      │
-│    │     Block.findByIdAndUpdate(resource.block, {                     │
-│    │       $inc: { linkCount: -1 },                                     │
-│    │       updatedAt: Date.now()                                         │
-│    │     })                                                             │
-│    │                                                                     │
-│    │  3. Soft delete resource                                            │
-│    │     Resource.findByIdAndUpdate(id, {                                │
-│    │       isInvalid: true,                                             │
-│    │       invalidatedAt: Date.now(),                                   │
-│    │       updatedAt: Date.now()                                        │
-│    │     }, { new: true })                                             │
+│    │  ┌── Transaction (atomic) ─────────────────────────────────────┐  │
+│    │  │                                                              │  │
+│    │  │  2. Decrement block linkCount                                │  │
+│    │  │     Block.findOne + save({                                   │  │
+│    │  │       linkCount: max(0, linkCount - 1),                     │  │
+│    │  │       updatedAt: Date.now()                                   │  │
+│    │  │     })                                                       │  │
+│    │  │                                                              │  │
+│    │  │  3. Soft delete resource                                     │  │
+│    │  │     Resource.findByIdAndUpdate(id, {                         │  │
+│    │  │       isInvalid: true,                                       │  │
+│    │  │       invalidatedAt: Date.now(),                             │  │
+│    │  │       updatedAt: Date.now()                                  │  │
+│    │  │     }, { new: true })                                       │  │
+│    │  │                                                              │  │
+│    │  └──────────────────────────────────────────────────────────────┘  │
+│    │  (falls back to non-transactional on standalone MongoDB)         │
 │    │                                                                     │
 │    └─                                                                    │
 │                                                                          │
