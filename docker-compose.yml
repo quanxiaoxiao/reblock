@@ -29,7 +29,7 @@ services:
     container_name: reblock-app
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${APP_PORT_BIND:-3900}:3000"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -45,6 +45,7 @@ services:
       CLEANUP_DEFAULT_DAYS: 30
       LOG_TTL_DAYS: 90
       TZ: ${TZ:-Asia/Shanghai}
+      API_AUTH_TOKEN: ${API_AUTH_TOKEN}
       # ENCRYPTION_KEY must be set - generate with: openssl rand -base64 32
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     volumes:
@@ -71,18 +72,19 @@ networks:
     driver: bridge
 
 # Usage:
-# 1. Create .env file with ENCRYPTION_KEY (and optional TZ)
-#    echo "ENCRYPTION_KEY=$(openssl rand -base64 32)" > .env
-#    echo "TZ=Asia/Shanghai" >> .env
+# 1. Create .env.docker with existing ENCRYPTION_KEY + new API_AUTH_TOKEN
+#    cp .env .env.docker
+#    echo "APP_PORT_BIND=3900" >> .env.docker
+#    echo "API_AUTH_TOKEN=$(openssl rand -hex 32)" >> .env.docker
 #
 # 2. Start services:
-#    docker-compose up -d
+#    docker compose --env-file .env.docker up -d
 #
 # 3. View logs:
-#    docker-compose logs -f app
+#    docker compose logs -f app
 #
 # 4. Stop services:
-#    docker-compose down
+#    docker compose down
 #
 # 5. Stop services and remove volumes:
-#    docker-compose down -v
+#    docker compose down -v

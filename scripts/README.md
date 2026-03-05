@@ -50,7 +50,10 @@ npm run test:e2e -- --help
 The script reads configuration from `.env`:
 
 ```bash
-# Server port (PORT takes precedence over SERVER_PORT)
+# Preferred endpoint override for scripts:
+# API_BASE_URL=http://localhost:3000
+#
+# Server port fallback (PORT takes precedence over SERVER_PORT)
 PORT=3000
 SERVER_PORT=4362
 
@@ -180,5 +183,4 @@ npm run errors:resolve -- --id <error_id> --resolution "fixed by ..."
 
 Generated files are stored under `tests/hurl/errors/generated/`.
 
-If `/errors` token protection is enabled, set `API_AUTH_TOKEN` in `.env` (preferred).
-Legacy `ERRORS_API_TOKEN` / `MIGRATION_API_TOKEN` remain compatibility fallbacks.
+If `/errors` token protection is enabled, set `API_AUTH_TOKEN` in `.env`.

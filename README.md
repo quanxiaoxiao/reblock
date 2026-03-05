@@ -387,19 +387,25 @@ Log categories:
 The easiest way to get started:
 
 ```bash
-# Generate encryption key and optional timezone
-echo "ENCRYPTION_KEY=$(openssl rand -base64 32)" > .env
-echo "TZ=Asia/Shanghai" >> .env   # optional
+# Prepare runtime env file (reuse your existing ENCRYPTION_KEY)
+cp .env .env.docker
+echo "APP_PORT_BIND=3900" >> .env.docker
+echo "API_AUTH_TOKEN=$(openssl rand -hex 32)" >> .env.docker
+echo "TZ=Asia/Shanghai" >> .env.docker   # optional
 
 # Start all services
-docker-compose up -d
+docker compose --env-file .env.docker up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop services
-docker-compose down
+docker compose down
 ```
+
+Service endpoint:
+- `http://<host>:3900`
+- Use `Authorization: Bearer <API_AUTH_TOKEN>` for protected APIs.
 
 ### Docker Build
 
@@ -408,7 +414,8 @@ Multi-stage build with Alpine Linux:
 ```bash
 # Standard build
 docker build --build-arg TZ=${TZ:-Asia/Shanghai} -t reblock .
-docker run -p 3000:3000 --env-file .env -e TZ=${TZ:-Asia/Shanghai} reblock
+docker run -p 3900:3000 --env-file .env.docker -e TZ=${TZ:-Asia/Shanghai} \
+  -e API_AUTH_TOKEN=${API_AUTH_TOKEN} reblock
 ```
 
 **Build Arguments:**
@@ -432,6 +439,10 @@ Timezone configuration:
 - Default timezone is `Asia/Shanghai`.
 - Override with `.env` (`TZ=UTC`) when using Docker Compose.
 - Override with `--build-arg TZ=...` (build time) and `-e TZ=...` (runtime) when using `docker build/run`.
+
+Upgrade note for existing deployments:
+- Rotate `API_AUTH_TOKEN` when needed.
+- Keep the current `ENCRYPTION_KEY` unchanged to avoid encrypted data becoming unreadable.
 
 ## Testing
 

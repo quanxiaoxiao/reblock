@@ -15,7 +15,7 @@
  *   npm run errors:repro -- --output tests/hurl/errors/generated/my.hurl
  */
 
-import { readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { spawn } from 'child_process';
 import {
@@ -25,31 +25,15 @@ import {
   logError,
   spinner,
 } from '../utils/style.mjs';
+import {
+  loadDotEnvIfExists,
+  resolveApiAuthToken,
+  resolveBaseUrl,
+} from '../utils/env-resolver.mjs';
 
-function loadEnv() {
-  try {
-    const envPath = resolve(process.cwd(), '.env');
-    const envContent = readFileSync(envPath, 'utf-8');
-    for (const line of envContent.split('\n')) {
-      const match = line.match(/^([^=#]+)=(.*)$/);
-      if (match) {
-        const key = match[1].trim();
-        const value = match[2].trim();
-        if (!process.env[key]) {
-          process.env[key] = value;
-        }
-      }
-    }
-  } catch {
-    // Ignore if .env doesn't exist
-  }
-}
+loadDotEnvIfExists();
 
-loadEnv();
-
-const DEFAULT_SERVER = process.env.SERVER_HOST || 'localhost';
-const DEFAULT_PORT = process.env.SERVER_PORT || '4362';
-const ERROR_API_TOKEN = process.env.API_AUTH_TOKEN || process.env.ERRORS_API_TOKEN || process.env.MIGRATION_API_TOKEN || '';
+const ERROR_API_TOKEN = resolveApiAuthToken();
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -60,8 +44,8 @@ function parseArgs() {
     expectStatus: null,
     output: null,
     run: false,
-    server: DEFAULT_SERVER,
-    port: DEFAULT_PORT,
+    server: null,
+    port: null,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -86,11 +70,19 @@ function parseArgs() {
     }
   }
 
+  const resolvedTarget = resolveBaseUrl({
+    serverArg: options.server,
+    portArg: options.port,
+  });
+  options.server = resolvedTarget.server;
+  options.port = resolvedTarget.port;
+  options.baseUrl = resolvedTarget.baseUrl;
+
   return options;
 }
 
 function getBaseUrl(options) {
-  return `http://${options.server}:${options.port}`;
+  return options.baseUrl;
 }
 
 function getAuthHeaders() {
