@@ -43,6 +43,7 @@ export interface IEntry extends Document {
   _id: Types.ObjectId;
   name: string;
   alias: string;
+  parentEntryId?: Types.ObjectId | null;
   isDefault?: boolean;
   order?: number;
   createdAt: number;
@@ -57,6 +58,7 @@ const entrySchema = new Schema<IEntry>({
   name: { type: String, required: true, trim: true },
   // AI-CONTRACT: unique(alias) scoped by isInvalid != true
   alias: { type: String, default: '', trim: true, index: true },
+  parentEntryId: { type: Schema.Types.ObjectId, ref: 'Entry', index: true },
   isDefault: { type: Boolean, default: false },
   order: { type: Number },
   createdAt: { type: Number, default: Date.now },
@@ -77,6 +79,8 @@ entrySchema.index(
   { isDefault: 1 },
   { unique: true, partialFilterExpression: { isDefault: true, isInvalid: false } }
 );
+entrySchema.index({ parentEntryId: 1, isInvalid: 1, createdAt: -1, _id: -1 });
+entrySchema.index({ isInvalid: 1, parentEntryId: 1 });
 
 // ─── Resource ─────────────────────────────────────────────────────────────────
 

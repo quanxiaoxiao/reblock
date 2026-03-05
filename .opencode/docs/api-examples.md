@@ -57,6 +57,7 @@ curl -X POST "http://localhost:3000/entries" \
   -d '{
     "name": "My Documents",
     "alias": "my-docs",
+    "parentEntryId": null,
     "description": "Personal document storage",
     "isDefault": false,
     "uploadConfig": {
@@ -74,6 +75,7 @@ curl -X POST "http://localhost:3000/entries" \
   "_id": "60d21b4667d0d8992e610c85",
   "name": "My Documents",
   "alias": "my-docs",
+  "parentEntryId": null,
   "description": "Personal document storage",
   "isDefault": false,
   "createdAt": 1772241136645,
@@ -98,6 +100,7 @@ curl -X PUT "http://localhost:3000/entries/60d21b4667d0d8992e610c85" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "My Updated Documents",
+    "parentEntryId": "60d21b4667d0d8992e610c00",
     "description": "Updated description",
     "uploadConfig": {
       "maxFileSize": 52428800,
@@ -113,6 +116,7 @@ curl -X PUT "http://localhost:3000/entries/60d21b4667d0d8992e610c85" \
   "_id": "60d21b4667d0d8992e610c85",
   "name": "My Updated Documents",
   "alias": "my-docs",
+  "parentEntryId": "60d21b4667d0d8992e610c00",
   "description": "Updated description",
   "isDefault": false,
   "createdAt": 1772241136645,
@@ -131,6 +135,41 @@ curl -X PUT "http://localhost:3000/entries/60d21b4667d0d8992e610c85" \
 ```json
 {
   "error": "Entry not found"
+}
+```
+
+---
+
+### Entry Hierarchy Query & Delete Guard
+
+**List direct children of a parent:**
+```bash
+curl "http://localhost:3000/entries?parentEntryId=60d21b4667d0d8992e610c00&includeChildrenCount=true"
+```
+
+**Response (200 OK):**
+```json
+{
+  "items": [
+    {
+      "_id": "60d21b4667d0d8992e610c85",
+      "name": "My Updated Documents",
+      "alias": "my-docs",
+      "parentEntryId": "60d21b4667d0d8992e610c00",
+      "childrenCount": 0
+    }
+  ],
+  "total": 1
+}
+```
+
+**Delete parent with active children (blocked):**
+```bash
+curl -X DELETE "http://localhost:3000/entries/60d21b4667d0d8992e610c00"
+
+# Response (409):
+{
+  "error": "entry has children"
 }
 ```
 

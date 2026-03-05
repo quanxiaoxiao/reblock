@@ -9,6 +9,9 @@ import { canUseTransactions, isTransactionUnsupportedError, markTransactionsUnsu
 
 // MongoDB filter type - allows flexible query objects
 type MongoFilter = Record<string, unknown>;
+type EntryListOptions = {
+  includeChildrenCount?: boolean;
+};
 
 export class BusinessError extends Error {
   constructor(message: string, public statusCode: number) {
@@ -22,12 +25,17 @@ export interface IEntryService {
   update(id: string, entryData: Partial<IEntry>): Promise<IEntry | null>;
   getById(id: string): Promise<IEntry | null>;
   getDefault(): Promise<IEntry | null>;
-  list(filter?: MongoFilter, limit?: number, offset?: number): Promise<PaginatedResult<IEntry>>;
+  list(filter?: MongoFilter, limit?: number, offset?: number, options?: EntryListOptions): Promise<PaginatedResult<IEntry>>;
   delete(id: string): Promise<IEntry | null>;
 }
 
 export class EntryService implements IEntryService {
   async create(entryData: Partial<IEntry>): Promise<IEntry> {
+    const normalizedParentEntryId = await this.normalizeParentEntryId((entryData as Record<string, unknown>).parentEntryId);
+    if (normalizedParentEntryId) {
+      await this.assertParentExists(normalizedParentEntryId);
+    }
+
     // Business uniqueness check for alias (per business-uniqueness.rule.md)
     if (entryData.alias) {
       const existing = await Entry.findOne({
@@ -50,6 +58,7 @@ export class EntryService implements IEntryService {
     // Service layer injects timestamps (per timestamp-soft-delete rule)
     const dataWithTimestamps = {
       ...entryData,
+      parentEntryId: normalizedParentEntryId === undefined ? (entryData as Record<string, unknown>).parentEntryId : normalizedParentEntryId,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -90,6 +99,16 @@ export class EntryService implements IEntryService {
     delete (safeData as Record<string, unknown>).createdAt;
     delete (safeData as Record<string, unknown>).updatedAt;
     delete (safeData as Record<string, unknown>).invalidatedAt;
+
+    const normalizedParentEntryId = await this.normalizeParentEntryId((safeData as Record<string, unknown>).parentEntryId);
+    if (normalizedParentEntryId !== undefined) {
+      if (normalizedParentEntryId === null) {
+        (safeData as Record<string, unknown>).parentEntryId = null;
+      } else {
+        await this.assertNoCycle(id, normalizedParentEntryId);
+        (safeData as Record<string, unknown>).parentEntryId = normalizedParentEntryId;
+      }
+    }
 
     const updatedEntry = await Entry.findByIdAndUpdate(
       id,
@@ -139,7 +158,12 @@ export class EntryService implements IEntryService {
     }
   }
 
-  async list(filter: MongoFilter = {}, limit?: number, offset?: number): Promise<PaginatedResult<IEntry>> {
+  async list(
+    filter: MongoFilter = {},
+    limit?: number,
+    offset?: number,
+    options: EntryListOptions = {}
+  ): Promise<PaginatedResult<IEntry>> {
     const safeFilter = { ...filter, isInvalid: { $ne: true } };
 
     // Check if pagination is requested
@@ -159,8 +183,10 @@ export class EntryService implements IEntryService {
         Entry.countDocuments(safeFilter)
       ]);
 
+      const enrichedItems = await this.attachChildrenCountIfRequested(items, options.includeChildrenCount);
+
       return {
-        items,
+        items: enrichedItems,
         total,
         limit: safeLimit,
         offset: safeOffset
@@ -169,9 +195,10 @@ export class EntryService implements IEntryService {
 
     // Non-paginated: return all items with total count
     const items = await Entry.find(safeFilter).sort({ createdAt: -1, _id: -1 }).exec();
+    const enrichedItems = await this.attachChildrenCountIfRequested(items, options.includeChildrenCount);
     return {
-      items,
-      total: items.length
+      items: enrichedItems,
+      total: enrichedItems.length
     };
   }
   
@@ -180,6 +207,28 @@ export class EntryService implements IEntryService {
     const existingEntry = await Entry.findOne({ _id: id, isInvalid: { $ne: true } });
     if (!existingEntry) {
       return null;
+    }
+
+    const hasChildren = await Entry.exists({
+      parentEntryId: id,
+      isInvalid: { $ne: true },
+    });
+    if (hasChildren) {
+      try {
+        await logService.logAction({
+          action: 'entry_delete_blocked_has_children',
+          success: false,
+          entryIds: [id],
+          details: {
+            entryId: id,
+          },
+          note: 'Entry delete blocked because it still has active children',
+          actor: 'entry-service',
+        });
+      } catch {
+        // Best effort logging, business result should still be returned.
+      }
+      throw new BusinessError('entry has children', 409);
     }
 
     // Find all associated resources that are not soft-deleted
@@ -324,6 +373,94 @@ export class EntryService implements IEntryService {
     }
 
     return updatedEntry;
+  }
+
+  private async normalizeParentEntryId(parentEntryId: unknown): Promise<string | null | undefined> {
+    if (parentEntryId === undefined) {
+      return undefined;
+    }
+    if (parentEntryId === null || parentEntryId === '') {
+      return null;
+    }
+
+    const id = String(parentEntryId);
+    if (!mongoose.isValidObjectId(id)) {
+      throw new BusinessError('parentEntryId is invalid', 400);
+    }
+    return id;
+  }
+
+  private async assertParentExists(parentEntryId: string): Promise<void> {
+    const parentEntry = await Entry.findOne({
+      _id: parentEntryId,
+      isInvalid: { $ne: true },
+    });
+    if (!parentEntry) {
+      throw new BusinessError('parent entry not found', 400);
+    }
+  }
+
+  private async assertNoCycle(entryId: string, parentEntryId: string): Promise<void> {
+    if (entryId === parentEntryId) {
+      throw new BusinessError('parentEntryId cannot reference itself', 400);
+    }
+
+    let cursor: string | null = parentEntryId;
+    while (cursor) {
+      const ancestor = await Entry.findOne(
+        { _id: cursor, isInvalid: { $ne: true } },
+        { _id: 1, parentEntryId: 1 }
+      ) as { _id: mongoose.Types.ObjectId; parentEntryId?: mongoose.Types.ObjectId | null } | null;
+
+      if (!ancestor) {
+        throw new BusinessError('parent entry not found', 400);
+      }
+
+      const ancestorId = ancestor._id.toString();
+      if (ancestorId === entryId) {
+        throw new BusinessError('parentEntryId would create a cycle', 400);
+      }
+
+      cursor = ancestor.parentEntryId ? ancestor.parentEntryId.toString() : null;
+    }
+  }
+
+  private async attachChildrenCountIfRequested(
+    items: IEntry[],
+    includeChildrenCount?: boolean
+  ): Promise<IEntry[]> {
+    if (!includeChildrenCount || items.length === 0) {
+      return items;
+    }
+
+    const ids = items.map(item => item._id);
+    const counts = await Entry.aggregate<{ _id: mongoose.Types.ObjectId; count: number }>([
+      {
+        $match: {
+          isInvalid: { $ne: true },
+          parentEntryId: { $in: ids },
+        },
+      },
+      {
+        $group: {
+          _id: '$parentEntryId',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const countMap = new Map<string, number>();
+    for (const row of counts) {
+      countMap.set(row._id.toString(), row.count);
+    }
+
+    return items.map((item) => {
+      const plain = typeof (item as unknown as { toObject?: () => Record<string, unknown> }).toObject === 'function'
+        ? (item as unknown as { toObject: () => Record<string, unknown> }).toObject()
+        : { ...(item as unknown as Record<string, unknown>) };
+      plain.childrenCount = countMap.get(item._id.toString()) || 0;
+      return plain as unknown as IEntry;
+    });
   }
 }
 

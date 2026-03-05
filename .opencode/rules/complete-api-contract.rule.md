@@ -96,6 +96,8 @@ GET /entries
 | offset    | number   | No       | 0-based starting index        |
 | alias     | string   | No       | Filter by alias                |
 | isDefault | boolean  | No       | Filter by default entry        |
+| parentEntryId | string | No    | Filter by parent entry (`root` for top-level entries) |
+| includeChildrenCount | boolean | No | Include `childrenCount` in each returned entry |
 
 **Response (200):**
 
@@ -115,9 +117,11 @@ interface Entry {
   _id: string;
   name: string;
   alias: string;
+  parentEntryId?: string | null;
   isDefault: boolean;
   order?: number;
   description: string;
+  childrenCount?: number;
   uploadConfig?: {
     maxFileSize?: number;
     allowedMimeTypes?: string[];
@@ -174,6 +178,7 @@ POST /entries
 interface CreateEntryRequest {
   name: string;           // Required
   alias?: string;         // Optional, defaults to ''
+  parentEntryId?: string | null; // Optional parent entry id, null = root
   isDefault?: boolean;    // Optional, default false
   order?: number;         // Optional
   description?: string;  // Optional, defaults to ''
@@ -191,6 +196,7 @@ interface CreateEntryRequest {
 - Only ONE entry can have `isDefault: true` at a time
 - `alias` must be unique among valid (non-deleted) entries
 - `name` is required and trimmed
+- If `parentEntryId` is provided, it must reference an existing valid entry
 - `maxFileSize` - Maximum file size in bytes
 - `allowedMimeTypes` - Array of MIME type patterns (e.g., `["image/*", "video/mp4"]`)
 - `retentionMs` - Optional resource retention window in milliseconds (> 0)
@@ -241,6 +247,7 @@ PUT /entries/:id
 interface UpdateEntryRequest {
   name?: string;
   alias?: string;
+  parentEntryId?: string | null; // Optional parent entry id, null = root
   isDefault?: boolean;
   order?: number;
   description?: string;
@@ -257,6 +264,8 @@ interface UpdateEntryRequest {
 
 - Cannot update `isInvalid`, `invalidatedAt`, `createdAt`, `updatedAt`
 - These are server-controlled fields
+- `parentEntryId` cannot reference itself
+- `parentEntryId` cannot create parent-child cycles
 
 **Response (200):** Updated entry object
 
@@ -287,15 +296,15 @@ DELETE /entries/:id
 
 **Cascade Behavior:**
 
-- Soft-deleting an entry does NOT automatically delete associated resources
-- Resources remain valid but become "orphaned" (not referenced by any valid entry)
-- Use `doctor` script to detect orphaned resources
+- Soft-deleting an entry cascades soft-delete to its resources and updates affected block linkCount values
+- Entry deletion is blocked when active child entries exist
 
 **Errors:**
 
 | Status | Description              |
 |--------|-------------------------|
 | 404    | Entry not found         |
+| 409    | Entry has children      |
 | 500    | Internal server error   |
 
 ---

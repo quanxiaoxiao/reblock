@@ -6,9 +6,11 @@ const EntrySchema = z.object({
   _id: z.string(),
   name: z.string(),
   alias: z.string().optional(),
+  parentEntryId: z.string().nullable().optional(),
   isDefault: z.boolean().optional(),
   order: z.number().optional(),
   description: z.string().optional(),
+  childrenCount: z.number().int().nonnegative().optional(),
   isInvalid: z.boolean().optional(),
   invalidatedAt: z.number().optional(),
   createdAt: z.number(),
@@ -24,6 +26,7 @@ const EntrySchema = z.object({
 const CreateEntrySchema = z.object({
   name: z.string().min(1),
   alias: z.string().optional(),
+  parentEntryId: z.string().nullable().optional(),
   isDefault: z.boolean().optional(),
   order: z.number().optional(),
   description: z.string().optional(),
@@ -45,6 +48,7 @@ const UploadConfigSchema = z.object({
 const UpdateEntrySchema = z.object({
   name: z.string().min(1).optional(),
   alias: z.string().optional(),
+  parentEntryId: z.string().nullable().optional(),
   isDefault: z.boolean().optional(),
   order: z.number().optional(),
   description: z.string().optional(),
@@ -114,7 +118,7 @@ router.openapi(
       return c.json(result, 201);
     } catch (error) {
       if (error instanceof BusinessError) {
-        return c.json({ error: error.message }, error.statusCode as 409);
+        return c.json({ error: error.message }, error.statusCode as 400 | 409);
       }
       throw error;
     }
@@ -138,6 +142,16 @@ router.openapi(
           param: { name: 'offset', in: 'query' },
           example: '0',
         }),
+        parentEntryId: z.string().optional().openapi({
+          param: { name: 'parentEntryId', in: 'query' },
+          example: 'root',
+          description: 'Filter by parent entry id. Use "root" (or empty value) for top-level entries.',
+        }),
+        includeChildrenCount: z.string().optional().openapi({
+          param: { name: 'includeChildrenCount', in: 'query' },
+          example: 'true',
+          description: 'When true, each returned entry includes childrenCount.',
+        }),
       }),
     },
     responses: {
@@ -154,10 +168,28 @@ router.openapi(
   async (c: Context) => {
     const limit = c.req.query('limit');
     const offset = c.req.query('offset');
+    const parentEntryIdRaw = c.req.query('parentEntryId');
+    const includeChildrenCount = c.req.query('includeChildrenCount') === 'true';
+
+    const filter: Record<string, unknown> = {};
+    if (parentEntryIdRaw !== undefined) {
+      if (parentEntryIdRaw === '' || parentEntryIdRaw === 'root') {
+        filter.$or = [
+          { parentEntryId: null },
+          { parentEntryId: { $exists: false } },
+        ];
+      } else if (!z.string().regex(/^[a-f\d]{24}$/i).safeParse(parentEntryIdRaw).success) {
+        return c.json({ error: 'parentEntryId is invalid' }, 400);
+      } else {
+        filter.parentEntryId = parentEntryIdRaw;
+      }
+    }
+
     const result = await entryService.list(
-      {},
+      filter,
       limit ? parseInt(limit, 10) : undefined,
-      offset ? parseInt(offset, 10) : undefined
+      offset ? parseInt(offset, 10) : undefined,
+      { includeChildrenCount }
     );
     return c.json(result);
   }
@@ -252,6 +284,14 @@ router.openapi(
           },
         },
       },
+      400: {
+        description: 'Invalid parent entry reference',
+        content: {
+          'application/json': {
+            schema: ErrorSchema,
+          },
+        },
+      },
       409: {
         description: 'Alias already exists',
         content: {
@@ -273,7 +313,7 @@ router.openapi(
       return c.json(result);
     } catch (error) {
       if (error instanceof BusinessError) {
-        return c.json({ error: error.message }, error.statusCode as 409);
+        return c.json({ error: error.message }, error.statusCode as 400 | 409);
       }
       throw error;
     }
@@ -310,15 +350,30 @@ router.openapi(
           },
         },
       },
+      409: {
+        description: 'Entry has children and cannot be deleted',
+        content: {
+          'application/json': {
+            schema: ErrorSchema,
+          },
+        },
+      },
     },
   }),
   async (c: Context) => {
     const id = c.req.param('id');
-    const result = await entryService.delete(id);
-    if (!result) {
-      return c.json({ error: 'Entry not found' }, 404);
+    try {
+      const result = await entryService.delete(id);
+      if (!result) {
+        return c.json({ error: 'Entry not found' }, 404);
+      }
+      return c.body(null, 204);
+    } catch (error) {
+      if (error instanceof BusinessError) {
+        return c.json({ error: error.message }, error.statusCode as 400 | 409);
+      }
+      throw error;
     }
-    return c.body(null, 204);
   }
 );
 

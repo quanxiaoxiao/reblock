@@ -93,6 +93,22 @@ describe('EntryRouter', () => {
       expect(res.status).toBe(400);
       expect(entryService.create).not.toHaveBeenCalled();
     });
+
+    it('should return 400 when parent entry is invalid', async () => {
+      vi.mocked(entryService.create).mockRejectedValue(
+        new (await import('../../../src/services')).BusinessError('parent entry not found', 400)
+      );
+
+      const res = await app.request('/entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Child Entry', parentEntryId: '507f1f77bcf86cd7994390aa' }),
+      });
+      const body = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(body).toHaveProperty('error', 'parent entry not found');
+    });
   });
 
   describe('GET /entries', () => {
@@ -112,6 +128,34 @@ describe('EntryRouter', () => {
 
       expect(res.status).toBe(200);
       expect(body).toEqual(mockEntries);
+    });
+
+    it('should filter by root parentEntryId and include childrenCount', async () => {
+      vi.mocked(entryService.list).mockResolvedValue({ items: [], total: 0 } as never);
+
+      const res = await app.request('/entries?parentEntryId=root&includeChildrenCount=true');
+
+      expect(res.status).toBe(200);
+      expect(entryService.list).toHaveBeenCalledWith(
+        {
+          $or: [
+            { parentEntryId: null },
+            { parentEntryId: { $exists: false } },
+          ],
+        },
+        undefined,
+        undefined,
+        { includeChildrenCount: true }
+      );
+    });
+
+    it('should return 400 for invalid parentEntryId filter', async () => {
+      const res = await app.request('/entries?parentEntryId=invalid-id');
+      const body = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(body).toHaveProperty('error', 'parentEntryId is invalid');
+      expect(entryService.list).not.toHaveBeenCalled();
     });
   });
 
@@ -233,6 +277,20 @@ describe('EntryRouter', () => {
 
       expect(res.status).toBe(404);
       expect(body).toHaveProperty('error', 'Entry not found');
+    });
+
+    it('should return 409 when entry has children', async () => {
+      vi.mocked(entryService.delete).mockRejectedValue(
+        new BusinessError('entry has children', 409)
+      );
+
+      const res = await app.request('/entries/entry-id-1', {
+        method: 'DELETE',
+      });
+      const body = await res.json();
+
+      expect(res.status).toBe(409);
+      expect(body).toHaveProperty('error', 'entry has children');
     });
   });
 });

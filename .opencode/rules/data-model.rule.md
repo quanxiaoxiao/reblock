@@ -78,6 +78,7 @@ DATA STRUCTURE Entry:
 - id: ObjectId (Unique identifier)
 - name: String (Display name, trimmed)
 - alias: String (URL-friendly identifier, trimmed)
+- parentEntryId: ObjectId | null (Optional self-reference for hierarchy)
 - isDefault: Boolean (Only one default entry allowed, defaults to false)
 - order: Number (Optional display order)
 - description: String (Description text, defaults to '')
@@ -101,6 +102,7 @@ DATA STRUCTURE UploadConfig:
 | `_id`          | ObjectId   | ✅ Auto   | -          | Unique identifier                     |
 | `name`         | string     | ✅ Yes    | -          | Display name (trimmed)                |
 | `alias`        | string     | -        | ''         | URL-friendly identifier (trimmed)     |
+| `parentEntryId`| ObjectId  | -        | null       | Optional parent Entry reference       |
 | `isDefault`    | boolean    | -        | false      | Only one default entry allowed        |
 | `order`        | number     | -        | -          | Display order                         |
 | `description`  | string     | -        | ''         | Description text                      |
@@ -131,6 +133,8 @@ DATA STRUCTURE UploadConfig:
 // Indexes for queries
 { isInvalid: 1 }
 { invalidatedAt: 1 }
+{ parentEntryId: 1, isInvalid: 1, createdAt: -1, _id: -1 }
+{ isInvalid: 1, parentEntryId: 1 }
 ```
 
 ### Constraints
@@ -138,10 +142,13 @@ DATA STRUCTURE UploadConfig:
 - Only ONE entry can have `isDefault: true` at a time (enforced by partial unique index)
 - `alias` must be unique among non-deleted entries
 - `name` is required and trimmed
+- `parentEntryId` must reference an existing valid entry when provided
+- Parent hierarchy must be acyclic (no self-reference or ancestor loops)
 
 ### Relationships
 
 - References: `Resource.entry` (one-to-many)
+- Self-reference: `Entry.parentEntryId -> Entry._id` (parent-child hierarchy)
 - Default entry: Can be used for uploads without specifying alias
 
 ---

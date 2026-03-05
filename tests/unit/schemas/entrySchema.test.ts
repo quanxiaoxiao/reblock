@@ -108,6 +108,42 @@ describe('entrySchema', () => {
       const result = createEntrySchema.safeParse(invalidData);
       expect(result.success).toBe(false);
     });
+
+    it('should validate parentEntryId in create body', () => {
+      const validData = {
+        body: {
+          name: 'Child Entry',
+          parentEntryId: VALID_OBJECT_ID,
+        },
+      };
+
+      const result = createEntrySchema.safeParse(validData);
+      expect(result.success).toBe(true);
+    });
+
+    it('should validate null parentEntryId in create body', () => {
+      const validData = {
+        body: {
+          name: 'Root Entry',
+          parentEntryId: null,
+        },
+      };
+
+      const result = createEntrySchema.safeParse(validData);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject invalid parentEntryId in create body', () => {
+      const invalidData = {
+        body: {
+          name: 'Child Entry',
+          parentEntryId: 'invalid-id',
+        },
+      };
+
+      const result = createEntrySchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('updateEntrySchema', () => {
@@ -215,6 +251,48 @@ describe('entrySchema', () => {
           uploadConfig: {
             retentionMs: 'abc',
           },
+        },
+        params: {
+          id: VALID_OBJECT_ID,
+        },
+      };
+
+      const result = updateEntrySchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
+
+    it('should validate parentEntryId in update body', () => {
+      const validData = {
+        body: {
+          parentEntryId: VALID_OBJECT_ID,
+        },
+        params: {
+          id: VALID_OBJECT_ID,
+        },
+      };
+
+      const result = updateEntrySchema.safeParse(validData);
+      expect(result.success).toBe(true);
+    });
+
+    it('should validate null parentEntryId in update body', () => {
+      const validData = {
+        body: {
+          parentEntryId: null,
+        },
+        params: {
+          id: VALID_OBJECT_ID,
+        },
+      };
+
+      const result = updateEntrySchema.safeParse(validData);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject invalid parentEntryId in update body', () => {
+      const invalidData = {
+        body: {
+          parentEntryId: 'invalid-id',
         },
         params: {
           id: VALID_OBJECT_ID,

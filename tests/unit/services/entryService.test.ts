@@ -6,6 +6,7 @@ import { Entry, Resource, Block } from '../../../src/models';
 vi.mock('../../../src/services/logService', () => ({
   logService: {
     logIssue: vi.fn().mockResolvedValue({}),
+    logAction: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -40,6 +41,8 @@ vi.mock('../../../src/models', () => ({
       findByIdAndUpdate: vi.fn(),
       updateMany: vi.fn(),
       countDocuments: vi.fn(),
+      exists: vi.fn(),
+      aggregate: vi.fn(),
     }
   ),
   Resource: Object.assign(
@@ -161,6 +164,38 @@ describe('EntryService', () => {
         { isDefault: false, updatedAt: expect.any(Number) }
       );
       expect(mockSave).toHaveBeenCalled();
+    });
+
+    it('should throw BusinessError when parentEntryId does not exist', async () => {
+      vi.mocked(Entry.findOne).mockResolvedValue(null as never);
+
+      await expect(service.create({
+        name: 'Child Entry',
+        parentEntryId: '507f1f77bcf86cd799439099' as any,
+      })).rejects.toThrow('parent entry not found');
+    });
+
+    it('should create entry with valid parentEntryId', async () => {
+      const parentId = '507f1f77bcf86cd799439099';
+      vi.mocked(Entry.findOne)
+        .mockResolvedValueOnce({ _id: parentId, isInvalid: false } as never)
+        .mockResolvedValueOnce(null as never);
+
+      mockSave.mockResolvedValue({
+        _id: 'entry-id-child',
+        name: 'Child Entry',
+        parentEntryId: parentId,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+
+      const result = await service.create({
+        name: 'Child Entry',
+        alias: 'child-entry',
+        parentEntryId: parentId as any,
+      });
+
+      expect(result.parentEntryId).toBe(parentId);
     });
   });
 
@@ -287,6 +322,25 @@ describe('EntryService', () => {
 
       const filterArg = vi.mocked(Entry.find).mock.calls[0][0];
       expect(filterArg).toHaveProperty('isInvalid', { $ne: true });
+    });
+
+    it('should include childrenCount when requested', async () => {
+      const mockEntries = [
+        { _id: { toString: () => '507f1f77bcf86cd799439011' }, name: 'Parent 1', toObject: () => ({ _id: '507f1f77bcf86cd799439011', name: 'Parent 1' }) },
+        { _id: { toString: () => '507f1f77bcf86cd799439012' }, name: 'Parent 2', toObject: () => ({ _id: '507f1f77bcf86cd799439012', name: 'Parent 2' }) },
+      ] as any[];
+      const mockSort = vi.fn().mockReturnValue({
+        exec: vi.fn().mockResolvedValue(mockEntries),
+      });
+      vi.mocked(Entry.find).mockReturnValue({ sort: mockSort } as never);
+      vi.mocked(Entry.aggregate).mockResolvedValue([
+        { _id: { toString: () => '507f1f77bcf86cd799439011' }, count: 3 },
+      ] as never);
+
+      const result = await service.list({}, undefined, undefined, { includeChildrenCount: true });
+
+      expect(result.items[0]).toHaveProperty('childrenCount', 3);
+      expect(result.items[1]).toHaveProperty('childrenCount', 0);
     });
   });
 
@@ -613,6 +667,47 @@ describe('EntryService', () => {
       expect(result?.alias).toBe('new-alias');
       expect(result?.uploadConfig?.maxFileSize).toBe(10485760);
     });
+
+    it('should reject self parent reference', async () => {
+      const entryId = '507f1f77bcf86cd799439011';
+      const existingEntry = {
+        _id: entryId,
+        name: 'Entry 1',
+        alias: 'entry-1',
+        isInvalid: false,
+      };
+      vi.mocked(Entry.findOne).mockResolvedValue(existingEntry as never);
+
+      await expect(service.update(entryId, {
+        parentEntryId: entryId as any,
+      })).rejects.toThrow('parentEntryId cannot reference itself');
+    });
+
+    it('should reject cycle parent reference', async () => {
+      const entryId = '507f1f77bcf86cd799439011';
+      const childId = '507f1f77bcf86cd799439012';
+
+      vi.mocked(Entry.findOne)
+        .mockResolvedValueOnce({
+          _id: entryId,
+          parentEntryId: null,
+          isInvalid: false,
+        } as never)
+        .mockResolvedValueOnce({
+          _id: childId,
+          parentEntryId: entryId,
+          isInvalid: false,
+        } as never)
+        .mockResolvedValueOnce({
+          _id: entryId,
+          parentEntryId: null,
+          isInvalid: false,
+        } as never);
+
+      await expect(service.update(entryId, {
+        parentEntryId: childId as any,
+      })).rejects.toThrow('parentEntryId would create a cycle');
+    });
   });
 
   describe('delete', () => {
@@ -633,6 +728,7 @@ describe('EntryService', () => {
       const associatedResources: any[] = [];
 
       vi.mocked(Entry.findOne).mockResolvedValue(existingEntry as never);
+      vi.mocked(Entry.exists).mockResolvedValue(null as never);
       vi.mocked(Resource.find).mockResolvedValue(associatedResources as never);
       vi.mocked(Block.find).mockResolvedValue([] as never);
       vi.mocked(Entry.findByIdAndUpdate).mockResolvedValue(deletedEntry as never);
@@ -667,6 +763,18 @@ describe('EntryService', () => {
       const result = await service.delete('soft-deleted-id');
 
       expect(result).toBeNull();
+    });
+
+    it('should reject deletion when entry has children', async () => {
+      vi.mocked(Entry.findOne).mockResolvedValue({
+        _id: 'entry-id-1',
+        isInvalid: false,
+      } as never);
+      vi.mocked(Entry.exists).mockResolvedValue({ _id: 'child-id-1' } as never);
+
+      await expect(service.delete('entry-id-1')).rejects.toThrow('entry has children');
+      expect(Resource.find).not.toHaveBeenCalled();
+      expect(Entry.findByIdAndUpdate).not.toHaveBeenCalled();
     });
   });
 });

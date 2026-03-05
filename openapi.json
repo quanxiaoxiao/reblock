@@ -575,6 +575,10 @@
                   "alias": {
                     "type": "string"
                   },
+                  "parentEntryId": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "isDefault": {
                     "type": "boolean"
                   },
@@ -633,6 +637,10 @@
                     "alias": {
                       "type": "string"
                     },
+                    "parentEntryId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "isDefault": {
                       "type": "boolean"
                     },
@@ -641,6 +649,10 @@
                     },
                     "description": {
                       "type": "string"
+                    },
+                    "childrenCount": {
+                      "type": "integer",
+                      "minimum": 0
                     },
                     "isInvalid": {
                       "type": "boolean"
@@ -746,6 +758,28 @@
             "required": false,
             "name": "offset",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "example": "root",
+              "description": "Filter by parent entry id. Use \"root\" (or empty value) for top-level entries."
+            },
+            "required": false,
+            "description": "Filter by parent entry id. Use \"root\" (or empty value) for top-level entries.",
+            "name": "parentEntryId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "example": "true",
+              "description": "When true, each returned entry includes childrenCount."
+            },
+            "required": false,
+            "description": "When true, each returned entry includes childrenCount.",
+            "name": "includeChildrenCount",
+            "in": "query"
           }
         ],
         "responses": {
@@ -770,6 +804,10 @@
                           "alias": {
                             "type": "string"
                           },
+                          "parentEntryId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "isDefault": {
                             "type": "boolean"
                           },
@@ -778,6 +816,10 @@
                           },
                           "description": {
                             "type": "string"
+                          },
+                          "childrenCount": {
+                            "type": "integer",
+                            "minimum": 0
                           },
                           "isInvalid": {
                             "type": "boolean"
@@ -875,6 +917,10 @@
                     "alias": {
                       "type": "string"
                     },
+                    "parentEntryId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "isDefault": {
                       "type": "boolean"
                     },
@@ -883,6 +929,10 @@
                     },
                     "description": {
                       "type": "string"
+                    },
+                    "childrenCount": {
+                      "type": "integer",
+                      "minimum": 0
                     },
                     "isInvalid": {
                       "type": "boolean"
@@ -976,6 +1026,10 @@
                   "alias": {
                     "type": "string"
                   },
+                  "parentEntryId": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "isDefault": {
                     "type": "boolean"
                   },
@@ -1031,6 +1085,10 @@
                     "alias": {
                       "type": "string"
                     },
+                    "parentEntryId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "isDefault": {
                       "type": "boolean"
                     },
@@ -1039,6 +1097,10 @@
                     },
                     "description": {
                       "type": "string"
+                    },
+                    "childrenCount": {
+                      "type": "integer",
+                      "minimum": 0
                     },
                     "isInvalid": {
                       "type": "boolean"
@@ -1078,6 +1140,24 @@
                     "name",
                     "createdAt",
                     "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parent entry reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
                   ]
                 }
               }
@@ -1143,6 +1223,24 @@
           },
           "404": {
             "description": "Entry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Entry has children and cannot be deleted",
             "content": {
               "application/json": {
                 "schema": {
