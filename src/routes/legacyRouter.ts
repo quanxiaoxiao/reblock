@@ -82,7 +82,7 @@ router.openapi(
       size: block.size,
       entry: resource.entry.toString(),
       hash: block.sha256,
-      category: resource.category || null,
+      category: resource.categoryKey || null,
     };
 
     return c.json(legacyResponse);

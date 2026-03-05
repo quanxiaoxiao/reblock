@@ -78,9 +78,9 @@
             "description": "MIME type",
             "example": "text/html"
           },
-          "category": {
+          "categoryKey": {
             "type": "string",
-            "description": "Resource category",
+            "description": "Resource category key",
             "example": "documentation"
           },
           "description": {
@@ -1281,7 +1281,7 @@
                   "entry": {
                     "type": "string"
                   },
-                  "category": {
+                  "categoryKey": {
                     "type": "string"
                   },
                   "description": {
@@ -1319,7 +1319,7 @@
                     "entry": {
                       "type": "string"
                     },
-                    "category": {
+                    "categoryKey": {
                       "type": "string"
                     },
                     "description": {
@@ -1421,6 +1421,17 @@
             "description": "Filter resources by entry alias",
             "name": "entryAlias",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter resources by category key. Use \"__none__\" to filter uncategorized resources.",
+              "example": "documents"
+            },
+            "required": false,
+            "description": "Filter resources by category key. Use \"__none__\" to filter uncategorized resources.",
+            "name": "categoryKey",
+            "in": "query"
           }
         ],
         "responses": {
@@ -1448,7 +1459,7 @@
                           "entry": {
                             "type": "string"
                           },
-                          "category": {
+                          "categoryKey": {
                             "type": "string"
                           },
                           "description": {
@@ -1578,7 +1589,7 @@
                     "entry": {
                       "type": "string"
                     },
-                    "category": {
+                    "categoryKey": {
                       "type": "string"
                     },
                     "description": {
@@ -1879,7 +1890,7 @@
                     "entry": {
                       "type": "string"
                     },
-                    "category": {
+                    "categoryKey": {
                       "type": "string"
                     },
                     "description": {
@@ -2006,7 +2017,7 @@
                     "entry": {
                       "type": "string"
                     },
-                    "category": {
+                    "categoryKey": {
                       "type": "string"
                     },
                     "description": {
@@ -2078,7 +2089,7 @@
         "tags": [
           "Resources"
         ],
-        "description": "Update a resource by ID",
+        "description": "Update a resource by ID. block is immutable here; use PATCH /resources/:id/block to change block binding.",
         "parameters": [
           {
             "schema": {
@@ -2096,16 +2107,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "block": {
-                    "type": "string"
-                  },
                   "mime": {
                     "type": "string"
                   },
                   "entry": {
                     "type": "string"
                   },
-                  "category": {
+                  "categoryKey": {
                     "type": "string"
                   },
                   "description": {
@@ -2114,7 +2122,8 @@
                   "name": {
                     "type": "string"
                   }
-                }
+                },
+                "additionalProperties": false
               }
             }
           }
@@ -2139,7 +2148,7 @@
                     "entry": {
                       "type": "string"
                     },
-                    "category": {
+                    "categoryKey": {
                       "type": "string"
                     },
                     "description": {
@@ -2179,6 +2188,27 @@
                     "entry",
                     "createdAt",
                     "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body or invalid entry/category reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
                   ]
                 }
               }
@@ -2384,6 +2414,447 @@
         }
       }
     },
+    "/resource-categories": {
+      "post": {
+        "tags": [
+          "Resource Categories"
+        ],
+        "description": "Create a global resource category",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "iconDataUri": {
+                    "type": "string",
+                    "maxLength": 32768
+                  },
+                  "color": {
+                    "type": "string",
+                    "pattern": "^#[0-9A-Fa-f]{6}$"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Category created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "iconDataUri": {
+                      "type": "string"
+                    },
+                    "color": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "key",
+                    "name",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Resource Categories"
+        ],
+        "description": "List global resource categories",
+        "responses": {
+          "200": {
+            "description": "Category list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": {
+                            "type": "string"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "iconDataUri": {
+                            "type": "string"
+                          },
+                          "color": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "_id",
+                          "key",
+                          "name",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "total": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "total"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resource-categories/:key": {
+      "get": {
+        "tags": [
+          "Resource Categories"
+        ],
+        "description": "Get a category by immutable key",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,127}$",
+              "example": "documents",
+              "description": "Global immutable category key (slug)"
+            },
+            "required": true,
+            "description": "Global immutable category key (slug)",
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "iconDataUri": {
+                      "type": "string"
+                    },
+                    "color": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "key",
+                    "name",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Resource Categories"
+        ],
+        "description": "Update category presentation fields (name/icon/color). key is immutable.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,127}$",
+              "example": "documents",
+              "description": "Global immutable category key (slug)"
+            },
+            "required": true,
+            "description": "Global immutable category key (slug)",
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "iconDataUri": {
+                    "type": "string",
+                    "maxLength": 32768
+                  },
+                  "color": {
+                    "type": "string",
+                    "pattern": "^#[0-9A-Fa-f]{6}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Category updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "iconDataUri": {
+                      "type": "string"
+                    },
+                    "color": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "key",
+                    "name",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Resource Categories"
+        ],
+        "description": "Delete a category if it is not referenced by any active resource",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,127}$",
+              "example": "documents",
+              "description": "Global immutable category key (slug)"
+            },
+            "required": true,
+            "description": "Global immutable category key (slug)",
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Category deleted"
+          },
+          "404": {
+            "description": "Category not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Category is still in use by resources",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/upload/{alias}?": {
       "post": {
         "tags": [
@@ -2438,7 +2909,7 @@
                     "mime": {
                       "type": "string"
                     },
-                    "category": {
+                    "categoryKey": {
                       "type": "string"
                     },
                     "createdAt": {

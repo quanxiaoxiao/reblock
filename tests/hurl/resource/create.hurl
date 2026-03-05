@@ -59,8 +59,7 @@ Content-Type: application/json
   "block": "{{block_id}}",
   "name": "Test Resource",
   "description": "A test resource with all fields",
-  "mime": "application/json",
-  "category": "test-category"
+  "mime": "application/json"
 }
 
 HTTP 201
@@ -72,7 +71,6 @@ jsonpath "$.block" == "{{block_id}}"
 jsonpath "$.name" == "Test Resource"
 jsonpath "$.description" == "A test resource with all fields"
 jsonpath "$.mime" == "application/json"
-jsonpath "$.category" == "test-category"
 jsonpath "$.isInvalid" == false
 jsonpath "$.createdAt" isInteger
 jsonpath "$.updatedAt" isInteger

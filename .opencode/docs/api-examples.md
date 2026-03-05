@@ -227,7 +227,7 @@ curl -X POST "http://localhost:3000/resources" \
     "entry": "60d21b4667d0d8992e610c85",
     "name": "document.pdf",
     "mime": "application/pdf",
-    "category": "documents",
+    "categoryKey": "documents",
     "description": "Important document"
   }'
 ```
@@ -240,7 +240,7 @@ curl -X POST "http://localhost:3000/resources" \
   "entry": "60d21b4667d0d8992e610c85",
   "name": "document.pdf",
   "mime": "application/pdf",
-  "category": "documents",
+  "categoryKey": "documents",
   "description": "Important document",
   "createdAt": 1772241136645,
   "updatedAt": 1772241136645,
@@ -254,6 +254,8 @@ curl -X POST "http://localhost:3000/resources" \
 
 ### Update Resource
 
+`PUT /resources/:id` does not allow changing `block`; use `PATCH /resources/:id/block`.
+
 **Request:**
 ```bash
 curl -X PUT "http://localhost:3000/resources/60d21b4667d0d8992e610c87" \
@@ -261,7 +263,7 @@ curl -X PUT "http://localhost:3000/resources/60d21b4667d0d8992e610c87" \
   -d '{
     "name": "updated-document.pdf",
     "description": "Updated important document",
-    "category": "archives"
+    "categoryKey": "archives"
   }'
 ```
 
@@ -273,7 +275,7 @@ curl -X PUT "http://localhost:3000/resources/60d21b4667d0d8992e610c87" \
   "entry": "60d21b4667d0d8992e610c85",
   "name": "updated-document.pdf",
   "description": "Updated important document",
-  "category": "archives",
+  "categoryKey": "archives",
   "createdAt": 1772241136645,
   "updatedAt": 1772242000000,
   "lastAccessedAt": 1772241136645,
@@ -286,6 +288,45 @@ curl -X PUT "http://localhost:3000/resources/60d21b4667d0d8992e610c87" \
 {
   "error": "Resource not found"
 }
+```
+
+---
+
+## Resource Category API Examples
+
+### Create Category
+
+```bash
+curl -X POST "http://localhost:3000/resource-categories" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Documents",
+    "iconDataUri": "data:image/svg+xml;base64,PHN2Zy8+",
+    "color": "#336699"
+  }'
+```
+
+### Update Category Name (key stays unchanged)
+
+```bash
+curl -X PUT "http://localhost:3000/resource-categories/documents" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Docs",
+    "color": "#224466"
+  }'
+```
+
+### Filter Resources by Category
+
+```bash
+curl -X GET "http://localhost:3000/resources?categoryKey=documents"
+```
+
+### Filter Uncategorized Resources
+
+```bash
+curl -X GET "http://localhost:3000/resources?categoryKey=__none__"
 ```
 
 ---

@@ -164,7 +164,7 @@ DATA STRUCTURE Resource:
 - entry: ObjectId or Entry (Reference to Entry entity)
 - name: String (Display name, defaults to '')
 - mime: String (Optional MIME type, e.g., "image/png")
-- category: String (Optional category for grouping)
+- categoryKey: String (Optional global category key for filtering/grouping)
 - description: String (Description text, defaults to '')
 - createdAt: Number (Unix timestamp in ms, auto-generated)
 - updatedAt: Number (Unix timestamp in ms, auto-generated)
@@ -182,7 +182,7 @@ DATA STRUCTURE Resource:
 | `entry`          | ObjectId  | ✅ Yes    | -          | Reference to Entry                    |
 | `name`           | string     | -        | ''         | Display name (trimmed)                |
 | `mime`           | string     | -        | -          | MIME type (e.g., "image/png")        |
-| `category`       | string     | -        | -          | Category for grouping                 |
+| `categoryKey`    | string     | -        | -          | Global category key                   |
 | `description`    | string     | -        | ''         | Description text                      |
 | `createdAt`      | number     | ✅ Auto   | Date.now() | Unix timestamp (ms)                   |
 | `updatedAt`      | number     | ✅ Auto   | Date.now() | Unix timestamp (ms)                   |
@@ -199,7 +199,7 @@ DATA STRUCTURE Resource:
 // Indexes for filtering
 { entry: 1 }
 { mime: 1 }
-{ category: 1 }
+{ categoryKey: 1 }
 { isInvalid: 1 }
 { invalidatedAt: 1 }
 
@@ -211,7 +211,9 @@ DATA STRUCTURE Resource:
 
 - `block` is required and must reference a valid Block
 - `entry` is required and must reference a valid Entry
-- `block` and `entry` are **immutable after creation** — cannot be updated via the standard update API (use block swap endpoint instead)
+- `categoryKey` (when set) must reference an existing active global `ResourceCategory.key`
+- `block` is **immutable in standard update API** — must be changed via `PATCH /resources/:id/block`
+- `entry` can be updated via standard update API, but must reference an existing valid Entry
 - When deleting, must decrement linked Block's `linkCount` (within a transaction)
 
 ### Relationships
@@ -219,6 +221,38 @@ DATA STRUCTURE Resource:
 - References: `Block.block` (many-to-one)
 - References: `Entry.entry` (many-to-one)
 - Populated fields: `block.sha256`, `entry.name`, `entry.alias`
+
+---
+
+## ResourceCategory Model
+
+### Interface
+
+```
+DATA STRUCTURE ResourceCategory:
+- id: ObjectId (Unique identifier)
+- key: String (Immutable global category key, unique among active docs)
+- name: String (Display name, mutable)
+- iconDataUri: Optional String (SVG/PNG data URI, <= 8KB decoded)
+- color: Optional String (#RRGGBB)
+- createdAt: Number (Unix timestamp in ms)
+- updatedAt: Number (Unix timestamp in ms)
+- isInvalid: Boolean (Soft delete flag, defaults to false)
+- invalidatedAt: Optional Number (Unix timestamp when soft deleted)
+```
+
+### Indexes
+
+```javascript
+{ key: 1 } // unique partial index where isInvalid == false
+{ updatedAt: -1, _id: -1 }
+```
+
+### Constraints
+
+- `key` is immutable after creation.
+- Reserved key `__none__` cannot be allocated.
+- Deletion is blocked when any active resource references `categoryKey = key`.
 
 ---
 

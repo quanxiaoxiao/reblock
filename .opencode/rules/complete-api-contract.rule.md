@@ -335,9 +335,8 @@ GET /resources
 |-------------|----------|----------|--------------------------------|
 | limit       | number   | No       | Items per page (default: 50)  |
 | offset      | number   | No       | 0-based starting index        |
-| entry       | string   | No       | Filter by entry ID            |
-| category    | string   | No       | Filter by category            |
-| mime        | string   | No       | Filter by MIME type           |
+| entryAlias  | string   | No       | Filter by entry alias         |
+| categoryKey | string   | No       | Filter by category key (`__none__` for uncategorized) |
 
 **Response (200):**
 
@@ -359,7 +358,7 @@ interface Resource {
   entry: string;           // Entry ObjectId
   name?: string;
   mime?: string;
-  category?: string;
+  categoryKey?: string;
   description?: string;
   sha256?: string;         // Populated from block
   createdAt: number;
@@ -419,17 +418,17 @@ PUT /resources/:id
 interface UpdateResourceRequest {
   name?: string;
   description?: string;
-  category?: string;
+  categoryKey?: string;
   entry?: string;        // Move to different entry
   mime?: string;
-  block?: string;        // Change associated block
 }
 ```
 
 **Constraints:**
 
 - Cannot update `isInvalid`, `invalidatedAt`, `createdAt`, `updatedAt`, `lastAccessedAt`
-- Changing `block` affects linkCount on both old and new blocks
+- `block` is immutable on this endpoint
+- To change block binding, use `PATCH /resources/:id/block`
 
 **Response (200):** Updated resource object
 
@@ -458,6 +457,51 @@ DELETE /resources/:id
 **Response (204):** No Content - Resource successfully soft-deleted
 
 **Cascade Behavior:**
+
+---
+
+## Resource Categories API
+
+Global category management uses immutable `key` and mutable presentation fields (`name`, `iconDataUri`, `color`).
+
+### Create Category
+
+```
+POST /resource-categories
+```
+
+### List Categories
+
+```
+GET /resource-categories
+```
+
+### Get Category
+
+```
+GET /resource-categories/:key
+```
+
+### Update Category
+
+```
+PUT /resource-categories/:key
+```
+
+Rules:
+
+- `key` is immutable and cannot be changed via update payload.
+- Only `name`, `iconDataUri`, `color` can be changed.
+
+### Delete Category
+
+```
+DELETE /resource-categories/:key
+```
+
+Rules:
+
+- Returns `409` when any active resource still references the category key.
 
 - Soft-deleting a resource decrements the linked Block's `linkCount`
 - If linkCount reaches 0, the block is NOT automatically deleted

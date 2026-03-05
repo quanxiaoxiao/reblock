@@ -4,6 +4,7 @@ import { createReadStream } from 'fs';
 import { Readable, PassThrough } from 'stream';
 import { pipeline } from 'stream/promises';
 import { resourceService, logService } from '../services';
+import { ResourceCategoryError } from '../services/resourceCategoryService';
 import { metricsSnapshotService } from '../services/metricsSnapshotService';
 import { DownloadError, ResourceMutationError } from '../services/resourceService';
 import { createDecryptStream, createDecryptStreamWithOffset } from '../utils/crypto';
@@ -31,7 +32,7 @@ const ResourceSchema = z.object({
   block: z.string(),
   mime: z.string().optional(),
   entry: z.string(),
-  category: z.string().optional(),
+  categoryKey: z.string().optional(),
   description: z.string().optional(),
   name: z.string().optional(),
   sha256: z.string().optional(),
@@ -48,19 +49,18 @@ const CreateResourceSchema = z.object({
   block: z.string(),
   mime: z.string().optional(),
   entry: z.string(),
-  category: z.string().optional(),
+  categoryKey: z.string().optional(),
   description: z.string().optional(),
   name: z.string().optional(),
 });
 
 const UpdateResourceSchema = z.object({
-  block: z.string().optional(),
   mime: z.string().optional(),
   entry: z.string().optional(),
-  category: z.string().optional(),
+  categoryKey: z.string().optional(),
   description: z.string().optional(),
   name: z.string().optional(),
-});
+}).strict();
 
 const ErrorSchema = z.object({
   error: z.string(),
@@ -131,8 +131,15 @@ router.openapi(
   }),
   async (c: Context) => {
     const body = await c.req.json();
-    const result = await resourceService.create(body);
-    return c.json(result, 201);
+    try {
+      const result = await resourceService.create(body);
+      return c.json(result, 201);
+    } catch (error) {
+      if (error instanceof ResourceCategoryError) {
+        return c.json({ error: error.message, code: error.code }, error.statusCode as 400 | 409 | 500);
+      }
+      throw error;
+    }
   }
 );
 
@@ -319,6 +326,11 @@ router.openapi(
           description: 'Filter resources by entry alias',
           example: 'some',
         }),
+        categoryKey: z.string().optional().openapi({
+          param: { name: 'categoryKey', in: 'query' },
+          description: 'Filter resources by category key. Use "__none__" to filter uncategorized resources.',
+          example: 'documents',
+        }),
       }),
     },
     responses: {
@@ -336,9 +348,10 @@ router.openapi(
     const limitParam = c.req.query('limit');
     const offsetParam = c.req.query('offset');
     const entryAlias = c.req.query('entryAlias');
+    const categoryKey = c.req.query('categoryKey');
     const limit = limitParam !== undefined ? parseInt(limitParam, 10) : undefined;
     const offset = offsetParam !== undefined ? parseInt(offsetParam, 10) : undefined;
-    const result = await resourceService.list({ entryAlias }, limit, offset);
+    const result = await resourceService.list({ entryAlias, categoryKey }, limit, offset);
     return c.json(result);
   }
 );
@@ -396,7 +409,7 @@ router.openapi(
     method: 'put',
     path: '/:id',
     tags: ['Resources'],
-    description: 'Update a resource by ID',
+    description: 'Update a resource by ID. block is immutable here; use PATCH /resources/:id/block to change block binding.',
     request: {
       params: z.object({
         id: z.string().openapi({
@@ -424,6 +437,14 @@ router.openapi(
           },
         },
       },
+      400: {
+        description: 'Invalid request body or invalid entry/category reference',
+        content: {
+          'application/json': {
+            schema: ErrorSchema,
+          },
+        },
+      },
       404: {
         description: 'Resource not found',
         content: {
@@ -445,11 +466,21 @@ router.openapi(
   async (c: Context) => {
     const id = c.req.param('id');
     const body = await c.req.json();
-    const result = await resourceService.update(id, body);
-    if (!result) {
-      return c.json({ error: 'Resource not found' }, 404);
+    try {
+      const result = await resourceService.update(id, body);
+      if (!result) {
+        return c.json({ error: 'Resource not found' }, 404);
+      }
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof ResourceCategoryError) {
+        return c.json({ error: error.message, code: error.code }, error.statusCode as 400 | 409 | 500);
+      }
+      if (error instanceof ResourceMutationError) {
+        return c.json({ error: error.message, code: error.code }, error.statusCode as 400 | 404 | 409 | 500);
+      }
+      throw error;
     }
-    return c.json(result);
   }
 );
 

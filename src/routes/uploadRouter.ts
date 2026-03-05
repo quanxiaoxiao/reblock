@@ -17,7 +17,7 @@ const ResourceSchema = z.object({
   name: z.string(),
   description: z.string(),
   mime: z.string().optional(),
-  category: z.string().optional(),
+  categoryKey: z.string().optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
   lastAccessedAt: z.number(),

@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import resourceRouter from '../../../src/routes/resourceRouter';
 import { resourceService } from '../../../src/services';
-import { DownloadError } from '../../../src/services/resourceService';
+import { DownloadError, ResourceMutationError } from '../../../src/services/resourceService';
+import { ResourceCategoryError } from '../../../src/services/resourceCategoryService';
 
 // Mock the resourceService
 vi.mock('../../../src/services', () => ({
@@ -65,6 +66,22 @@ describe('ResourceRouter', () => {
 
       expect(res.status).toBe(400);
     });
+
+    it('should return 400 for invalid categoryKey', async () => {
+      vi.mocked(resourceService.create).mockRejectedValue(
+        new ResourceCategoryError('categoryKey does not exist', 400, 'CATEGORY_NOT_FOUND')
+      );
+
+      const res = await app.request('/resources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ block: 'block-id-1', entry: 'entry-id-1', categoryKey: 'missing' }),
+      });
+      const body = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(body.code).toBe('CATEGORY_NOT_FOUND');
+    });
   });
 
   describe('GET /resources', () => {
@@ -102,7 +119,7 @@ describe('ResourceRouter', () => {
       expect(res.status).toBe(200);
       expect(body.total).toBe(10);
       expect(resourceService.list).toHaveBeenCalledWith(
-        { entryAlias: undefined },
+        { entryAlias: undefined, categoryKey: undefined },
         5,
         0
       );
@@ -120,7 +137,38 @@ describe('ResourceRouter', () => {
 
       expect(res.status).toBe(200);
       expect(resourceService.list).toHaveBeenCalledWith(
-        { entryAlias: 'test-alias' },
+        { entryAlias: 'test-alias', categoryKey: undefined },
+        undefined,
+        undefined
+      );
+    });
+
+    it('should filter by categoryKey', async () => {
+      const mockResources = {
+        items: [{ _id: '1', block: 'block1', entry: 'entry-id-1', categoryKey: 'documents' }],
+        total: 1,
+      };
+
+      vi.mocked(resourceService.list).mockResolvedValue(mockResources as never);
+
+      const res = await app.request('/resources?categoryKey=documents');
+
+      expect(res.status).toBe(200);
+      expect(resourceService.list).toHaveBeenCalledWith(
+        { entryAlias: undefined, categoryKey: 'documents' },
+        undefined,
+        undefined
+      );
+    });
+
+    it('should filter uncategorized with __none__', async () => {
+      vi.mocked(resourceService.list).mockResolvedValue({ items: [], total: 0 } as never);
+
+      const res = await app.request('/resources?categoryKey=__none__');
+
+      expect(res.status).toBe(200);
+      expect(resourceService.list).toHaveBeenCalledWith(
+        { entryAlias: undefined, categoryKey: '__none__' },
         undefined,
         undefined
       );
@@ -189,6 +237,65 @@ describe('ResourceRouter', () => {
 
       expect(res.status).toBe(404);
       expect(body).toHaveProperty('error', 'Resource not found');
+    });
+
+    it('should return 400 for invalid categoryKey on update', async () => {
+      vi.mocked(resourceService.update).mockRejectedValue(
+        new ResourceCategoryError('categoryKey does not exist', 400, 'CATEGORY_NOT_FOUND')
+      );
+
+      const res = await app.request('/resources/resource-id-1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryKey: 'missing' }),
+      });
+      const body = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(body.code).toBe('CATEGORY_NOT_FOUND');
+    });
+
+    it('should reject block updates in PUT body', async () => {
+      const res = await app.request('/resources/resource-id-1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ block: '507f1f77bcf86cd799439011' }),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('should allow updating entry', async () => {
+      vi.mocked(resourceService.update).mockResolvedValue({
+        _id: 'resource-id-1',
+        entry: 'entry-id-2',
+      } as never);
+
+      const res = await app.request('/resources/resource-id-1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entry: 'entry-id-2' }),
+      });
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body.entry).toBe('entry-id-2');
+    });
+
+    it('should return 400 when target entry is invalid', async () => {
+      vi.mocked(resourceService.update).mockRejectedValue(
+        new ResourceMutationError('entry not found', 400, 'ENTRY_NOT_FOUND')
+      );
+
+      const res = await app.request('/resources/resource-id-1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entry: '507f1f77bcf86cd799439099' }),
+      });
+      const body = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(body.code).toBe('ENTRY_NOT_FOUND');
     });
   });
 

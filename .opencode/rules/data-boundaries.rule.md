@@ -186,13 +186,13 @@ END IF
 - `application/pdf`
 - `text/plain`
 
-### category
+### categoryKey
 
 | Property | Constraint |
 |----------|------------|
 | Type | String |
-| Maximum Length | `100` |
-| Trimmed | Yes |
+| Maximum Length | `128` |
+| Format | Lowercase slug (`^[a-z0-9][a-z0-9-]{0,127}$`) |
 | Optional | Yes |
 
 ### description
@@ -228,6 +228,46 @@ END IF
 | Minimum | `0` |
 | Maximum | `86400000` (24 hours in ms) |
 | Unit | Milliseconds |
+| Optional | Yes |
+
+---
+
+## ResourceCategory Field Boundaries
+
+### key
+
+| Property | Constraint |
+|----------|------------|
+| Type | String |
+| Maximum Length | `128` |
+| Format | Lowercase slug (`^[a-z0-9][a-z0-9-]{0,127}$`) |
+| Immutable | Yes |
+| Reserved | `__none__` |
+
+### name
+
+| Property | Constraint |
+|----------|------------|
+| Type | String |
+| Minimum Length | `1` |
+| Maximum Length | `128` |
+| Trimmed | Yes |
+
+### iconDataUri
+
+| Property | Constraint |
+|----------|------------|
+| Type | String |
+| Format | Data URI (`image/svg+xml` or `image/png`) |
+| Decoded Size | `<= 8192` bytes |
+| Optional | Yes |
+
+### color
+
+| Property | Constraint |
+|----------|------------|
+| Type | String |
+| Format | Hex color (`#RRGGBB`) |
 | Optional | Yes |
 
 ---

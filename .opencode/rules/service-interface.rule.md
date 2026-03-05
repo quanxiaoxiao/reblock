@@ -242,6 +242,8 @@ HTTP 409 Conflict
 
 - Resources reference blocks and entries
 - Block linkCount is maintained on resource create/delete
+- `PUT /resources/:id` allows metadata + `entry` updates, but rejects `block`
+- Block switches must use `PATCH /resources/:id/block`
 - Soft delete only (no physical deletion)
 - lastAccessedAt is updated on download
 
@@ -258,7 +260,7 @@ Content-Type: application/json
   "entry": "60d21b4667d0d8992e610c85",
   "name": "document.pdf",
   "mime": "application/pdf",
-  "category": "documents",
+  "categoryKey": "documents",
   "description": "Important document"
 }
 
@@ -269,7 +271,7 @@ HTTP 201 Created
   "entry": "60d21b4667d0d8992e610c85",
   "name": "document.pdf",
   "mime": "application/pdf",
-  "category": "documents",
+  "categoryKey": "documents",
   "description": "Important document",
   "createdAt": 1772241136645,
   "updatedAt": 1772241136645,

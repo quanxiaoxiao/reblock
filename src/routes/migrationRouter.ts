@@ -21,8 +21,8 @@ const ImportResourceSchema = z.object({
     description: 'MIME type',
     example: 'text/html'
   }),
-  category: z.string().optional().openapi({
-    description: 'Resource category',
+  categoryKey: z.string().optional().openapi({
+    description: 'Resource category key',
     example: 'documentation'
   }),
   description: z.string().optional().openapi({

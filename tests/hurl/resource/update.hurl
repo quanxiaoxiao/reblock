@@ -83,11 +83,11 @@ jsonpath "$.createdAt" == {{resource_created_at}}
 jsonpath "$.updatedAt" isInteger
 jsonpath "$.updatedAt" > {{resource_created_at}}
 
-# Test 2: Update resource block reference
-PUT {{BASE_URL}}/resources/{{resource_id}}
+# Test 2: Update resource block reference (PATCH only)
+PATCH {{BASE_URL}}/resources/{{resource_id}}/block
 Content-Type: application/json
 {
-  "block": "{{block2_id}}"
+  "newBlockId": "{{block2_id}}"
 }
 
 HTTP 200
@@ -95,7 +95,18 @@ HTTP 200
 jsonpath "$.block" == "{{block2_id}}"
 jsonpath "$.name" == "Updated Resource"
 
-# Test 3: Update resource with empty body (no-op)
+# Test 3: PUT update must reject block field
+PUT {{BASE_URL}}/resources/{{resource_id}}
+Content-Type: application/json
+{
+  "block": "{{block_id}}"
+}
+
+HTTP 400
+[Asserts]
+jsonpath "$.error" exists
+
+# Test 4: Update resource with empty body (no-op)
 PUT {{BASE_URL}}/resources/{{resource_id}}
 Content-Type: application/json
 {}
@@ -105,7 +116,7 @@ HTTP 200
 jsonpath "$._id" == "{{resource_id}}"
 jsonpath "$.entry" == "{{entry_id}}"
 
-# Test 4: Update non-existent resource should return 404
+# Test 5: Update non-existent resource should return 404
 PUT {{BASE_URL}}/resources/507f1f77bcf86cd799439099
 Content-Type: application/json
 {
@@ -116,17 +127,15 @@ HTTP 404
 [Asserts]
 jsonpath "$.error" exists
 
-# Test 5: Update resource category and mime
+# Test 6: Update resource mime
 PUT {{BASE_URL}}/resources/{{resource_id}}
 Content-Type: application/json
 {
-  "category": "updated-category",
   "mime": "application/json"
 }
 
 HTTP 200
 [Asserts]
-jsonpath "$.category" == "updated-category"
 jsonpath "$.mime" == "application/json"
 jsonpath "$.name" == "Updated Resource"
 

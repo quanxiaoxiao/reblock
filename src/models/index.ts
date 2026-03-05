@@ -89,7 +89,7 @@ export interface IResource extends Document {
   block: Types.ObjectId | IBlock;
   mime?: string;
   entry: Types.ObjectId | IEntry;
-  category?: string;
+  categoryKey?: string;
   description: string;
   name: string;
   createdAt: number;
@@ -120,11 +120,23 @@ export interface IResourceHistory extends Document {
   rollbackable: boolean;
 }
 
+export interface IResourceCategory extends Document {
+  _id: Types.ObjectId;
+  key: string;
+  name: string;
+  iconDataUri?: string;
+  color?: string;
+  createdAt: number;
+  updatedAt: number;
+  isInvalid: boolean;
+  invalidatedAt?: number;
+}
+
 const resourceSchema = new Schema<IResource>({
   block: { type: Schema.Types.ObjectId, required: true, ref: 'Block', index: true },
   mime: { type: String, index: true },
   entry: { type: Schema.Types.ObjectId, required: true, ref: 'Entry', index: true },
-  category: { type: String, index: true },
+  categoryKey: { type: String, index: true },
   description: { type: String, default: '', trim: true },
   name: { type: String, default: '', trim: true },
   createdAt: { type: Number, default: Date.now },
@@ -136,6 +148,23 @@ const resourceSchema = new Schema<IResource>({
   userAgent: { type: String },
   uploadDuration: { type: Number },
 });
+
+const resourceCategorySchema = new Schema<IResourceCategory>({
+  key: { type: String, required: true, trim: true, index: true },
+  name: { type: String, required: true, trim: true },
+  iconDataUri: { type: String },
+  color: { type: String },
+  createdAt: { type: Number, default: Date.now },
+  updatedAt: { type: Number, default: Date.now },
+  isInvalid: { type: Boolean, index: true, default: false },
+  invalidatedAt: { type: Number, index: true },
+});
+
+resourceCategorySchema.index(
+  { key: 1 },
+  { unique: true, partialFilterExpression: { isInvalid: { $eq: false } } }
+);
+resourceCategorySchema.index({ updatedAt: -1, _id: -1 });
 
 const resourceHistorySchema = new Schema<IResourceHistory>({
   resourceId: { type: Schema.Types.ObjectId, required: true, ref: 'Resource', index: true },
@@ -155,6 +184,7 @@ resourceHistorySchema.index({ toBlockId: 1, changedAt: -1 });
 export const Block = mongoose.model<IBlock>('Block', blockSchema);
 export const Resource = mongoose.model<IResource>('Resource', resourceSchema);
 export const ResourceHistory = mongoose.model<IResourceHistory>('ResourceHistory', resourceHistorySchema);
+export const ResourceCategory = mongoose.model<IResourceCategory>('ResourceCategory', resourceCategorySchema);
 export const Entry = mongoose.model<IEntry>('Entry', entrySchema);
 
 // Re-export LogEntry and types from logEntry.ts

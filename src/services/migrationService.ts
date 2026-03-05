@@ -21,7 +21,7 @@ export interface MigrationResourceData {
   entryAlias: string;
   name: string;
   mime?: string;
-  category?: string;
+  categoryKey?: string;
   description?: string;
   contentBase64: string;
   createdAt?: number;
@@ -50,7 +50,7 @@ export class MigrationService {
   private readonly blocksDir = env.STORAGE_BLOCK_DIR;
 
   async importResource(data: MigrationResourceData, signal?: AbortSignal): Promise<MigrationResult> {
-    const { legacyId, entryAlias, name, mime, category, description, contentBase64, createdAt, updatedAt } = data;
+    const { legacyId, entryAlias, name, mime, categoryKey, description, contentBase64, createdAt, updatedAt } = data;
     this.throwIfAborted(signal);
 
     // Step 1: Validate legacyId format
@@ -108,7 +108,7 @@ export class MigrationService {
         block,
         name,
         mime,
-        category,
+        categoryKey,
         description,
         createdAt,
         updatedAt
@@ -357,12 +357,12 @@ export class MigrationService {
     block: IBlock;
     name: string;
     mime?: string;
-    category?: string;
+    categoryKey?: string;
     description?: string;
     createdAt?: number;
     updatedAt?: number;
   }): Promise<IResource> {
-    const { legacyId, entry, block, name, mime, category, description, createdAt, updatedAt } = params;
+    const { legacyId, entry, block, name, mime, categoryKey, description, createdAt, updatedAt } = params;
     const now = Date.now();
     const resourceCreatedAt = createdAt || now;
     const resourceUpdatedAt = updatedAt || now;
@@ -374,7 +374,7 @@ export class MigrationService {
       name: name || '',
       description: description || '',
       mime: mime || undefined,
-      category: category || undefined,
+      categoryKey: categoryKey || undefined,
       createdAt: resourceCreatedAt,
       updatedAt: resourceUpdatedAt,
       lastAccessedAt: resourceCreatedAt,

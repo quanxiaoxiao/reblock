@@ -3,6 +3,7 @@ import { ResourceService, resourceService, DownloadError, ResourceMutationError 
 import { Resource, Block, Entry, ResourceHistory } from '../../../src/models';
 import fs from 'fs/promises';
 import { logService } from '../../../src/services/logService';
+import { resourceCategoryService } from '../../../src/services/resourceCategoryService';
 
 // Mock dependencies
 vi.mock('../../../src/models', () => ({
@@ -56,6 +57,12 @@ vi.mock('../../../src/services/logService', () => ({
   logService: {
     logIssue: vi.fn().mockResolvedValue({}),
     logAction: vi.fn().mockResolvedValue({}),
+  },
+}));
+
+vi.mock('../../../src/services/resourceCategoryService', () => ({
+  resourceCategoryService: {
+    ensureCategoryKeyExists: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -121,6 +128,7 @@ describe('ResourceService', () => {
         updatedAt: expect.any(Number),
         lastAccessedAt: expect.any(Number),
       }));
+      expect(resourceCategoryService.ensureCategoryKeyExists).toHaveBeenCalledWith(undefined);
       expect(mockSave).toHaveBeenCalled();
       expect(result).toEqual(mockSavedResource);
     });
@@ -162,7 +170,47 @@ describe('ResourceService', () => {
 
       const result = await service.update('507f1f77bcf86cd799439011', { name: 'New Name' });
 
+      expect(resourceCategoryService.ensureCategoryKeyExists).not.toHaveBeenCalled();
       expect(result).toBeNull();
+    });
+
+    it('should reject block update via PUT flow', async () => {
+      (Resource.findOne as any).mockResolvedValue({ _id: 'resource-id-1' });
+
+      await expect(
+        service.update('507f1f77bcf86cd799439011', { block: '507f1f77bcf86cd799439022' } as any)
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        code: 'IMMUTABLE_BLOCK',
+      });
+    });
+
+    it('should validate target entry when updating entry field', async () => {
+      (Resource.findOne as any).mockResolvedValue({ _id: 'resource-id-1' });
+      (Entry.findOne as any).mockReturnValue({
+        exec: vi.fn().mockResolvedValue({ _id: '507f1f77bcf86cd799439013' }),
+      });
+      (Resource.findByIdAndUpdate as any).mockResolvedValue({ _id: 'resource-id-1', entry: '507f1f77bcf86cd799439013' });
+
+      const result = await service.update('507f1f77bcf86cd799439011', { entry: '507f1f77bcf86cd799439013' } as any);
+
+      expect(Entry.findOne).toHaveBeenCalled();
+      expect(resourceCategoryService.ensureCategoryKeyExists).toHaveBeenCalledWith(undefined);
+      expect(result).toEqual({ _id: 'resource-id-1', entry: '507f1f77bcf86cd799439013' });
+    });
+
+    it('should fail when target entry does not exist', async () => {
+      (Resource.findOne as any).mockResolvedValue({ _id: 'resource-id-1' });
+      (Entry.findOne as any).mockReturnValue({
+        exec: vi.fn().mockResolvedValue(null),
+      });
+
+      await expect(
+        service.update('507f1f77bcf86cd799439011', { entry: '507f1f77bcf86cd799439013' } as any)
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        code: 'ENTRY_NOT_FOUND',
+      });
     });
   });
 

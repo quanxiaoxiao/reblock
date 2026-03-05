@@ -8,8 +8,10 @@ import { env } from '../config/env';
 import { generateStorageName, generateIV } from '../utils/crypto';
 import { validatePagination } from '../utils/pagination';
 import { logService } from './logService';
+import { resourceCategoryService } from './resourceCategoryService';
 import { LogLevel, LogCategory, DataLossRisk } from '../models/logEntry';
 import { canUseTransactions, isTransactionUnsupportedError, markTransactionsUnsupported } from '../utils/transaction';
+import { RESERVED_CATEGORY_KEY } from '../utils/resourceCategory';
 
 // MongoDB filter type - allows flexible query objects
 type MongoFilter = Record<string, unknown>;
@@ -81,6 +83,8 @@ export interface IResourceService {
 export class ResourceService implements IResourceService {
 
   async create(resourceData: Partial<IResource>): Promise<IResource> {
+    await resourceCategoryService.ensureCategoryKeyExists(resourceData.categoryKey);
+
     // Service layer injects timestamps (per timestamp-soft-delete rule)
     const resource = new Resource({
       ...resourceData,
@@ -105,6 +109,28 @@ export class ResourceService implements IResourceService {
     delete (safeData as Record<string, unknown>).createdAt;
     delete (safeData as Record<string, unknown>).updatedAt;
     delete (safeData as Record<string, unknown>).invalidatedAt;
+
+    // block changes are only allowed via PATCH /resources/:id/block
+    if ((safeData as Record<string, unknown>).block !== undefined) {
+      throw new ResourceMutationError(
+        'block is immutable on this endpoint; use PATCH /resources/:id/block',
+        400,
+        'IMMUTABLE_BLOCK'
+      );
+    }
+
+    if ((safeData as Record<string, unknown>).entry !== undefined) {
+      const entryId = (safeData as { entry?: unknown }).entry;
+      if (typeof entryId !== 'string' || !mongoose.isValidObjectId(entryId)) {
+        throw new ResourceMutationError('entry is invalid', 400, 'INVALID_ENTRY');
+      }
+      const targetEntry = await Entry.findOne({ _id: entryId, isInvalid: { $ne: true } }).exec();
+      if (!targetEntry) {
+        throw new ResourceMutationError('entry not found', 400, 'ENTRY_NOT_FOUND');
+      }
+    }
+
+    await resourceCategoryService.ensureCategoryKeyExists(safeData.categoryKey);
 
     const updatedResource = await Resource.findByIdAndUpdate(
       id,
@@ -393,7 +419,7 @@ export class ResourceService implements IResourceService {
   }
 
   async list(filter: MongoFilter = {}, limit?: number, offset?: number): Promise<PaginatedResult<IResourceWithSha256>> {
-    const { entryAlias, ...otherFilters } = filter;
+    const { entryAlias, categoryKey, ...otherFilters } = filter;
     
     // Build MongoDB filter
     const mongoFilter: MongoFilter = { ...otherFilters };
@@ -406,6 +432,18 @@ export class ResourceService implements IResourceService {
       } else {
         // Entry not found - return empty result
         return { items: [], total: 0, limit, offset };
+      }
+    }
+
+    if (typeof categoryKey === 'string') {
+      if (categoryKey === RESERVED_CATEGORY_KEY) {
+        mongoFilter.$or = [
+          { categoryKey: null },
+          { categoryKey: { $exists: false } },
+          { categoryKey: '' },
+        ];
+      } else {
+        mongoFilter.categoryKey = categoryKey;
       }
     }
     

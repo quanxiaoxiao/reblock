@@ -3,6 +3,9 @@ import {
   createResourceSchema,
   updateResourceSchema,
   getResourceByIdSchema,
+  createResourceCategorySchema,
+  updateResourceCategorySchema,
+  getResourceCategoryByKeySchema,
 } from '../../../src/schemas/resourceSchema';
 
 const VALID_OBJECT_ID = '507f1f77bcf86cd799439011';
@@ -17,7 +20,7 @@ describe('resourceSchema', () => {
           block: VALID_BLOCK_ID,
           entry: VALID_ENTRY_ID,
           mime: 'text/plain',
-          category: 'documents',
+          categoryKey: 'documents',
           description: 'Test resource',
           name: 'test.txt',
         },
@@ -167,7 +170,7 @@ describe('resourceSchema', () => {
       const validData = {
         body: {
           mime: 'application/octet-stream',
-          category: 'other',
+          categoryKey: 'other',
           description: '',
           name: '',
         },
@@ -180,11 +183,23 @@ describe('resourceSchema', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should not include block or entry in update body', () => {
-      // block and entry are excluded from updates — use PATCH /:id/block instead
+    it('should reject block in update body', () => {
       const data = {
         body: {
           block: VALID_BLOCK_ID,
+        },
+        params: {
+          id: VALID_OBJECT_ID,
+        },
+      };
+
+      const result = updateResourceSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    it('should allow entry in update body', () => {
+      const data = {
+        body: {
           entry: VALID_ENTRY_ID,
         },
         params: {
@@ -193,12 +208,7 @@ describe('resourceSchema', () => {
       };
 
       const result = updateResourceSchema.safeParse(data);
-      // Zod strips unknown keys, so it passes but block/entry are removed
       expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.body).not.toHaveProperty('block');
-        expect(result.data.body).not.toHaveProperty('entry');
-      }
     });
   });
 
@@ -243,6 +253,42 @@ describe('resourceSchema', () => {
 
       const result = getResourceByIdSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe('resource category schemas', () => {
+    it('should validate category create payload', () => {
+      const result = createResourceCategorySchema.safeParse({
+        body: {
+          name: 'Documents',
+          iconDataUri: 'data:image/svg+xml;base64,PHN2Zy8+',
+          color: '#AABBCC',
+        },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject invalid color', () => {
+      const result = createResourceCategorySchema.safeParse({
+        body: {
+          name: 'Documents',
+          color: 'red',
+        },
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('should validate update and key schema', () => {
+      const updateResult = updateResourceCategorySchema.safeParse({
+        params: { key: 'documents-1' },
+        body: { name: 'Docs' },
+      });
+      expect(updateResult.success).toBe(true);
+
+      const getResult = getResourceCategoryByKeySchema.safeParse({
+        params: { key: 'documents-1' },
+      });
+      expect(getResult.success).toBe(true);
     });
   });
 });

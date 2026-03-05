@@ -290,7 +290,7 @@ export class EntryService implements IEntryService {
           name: r.name,
           description: r.description,
           mime: r.mime,
-          category: r.category,
+          categoryKey: r.categoryKey,
           createdAt: r.createdAt,
         })),
         blockLinkCountChanges,

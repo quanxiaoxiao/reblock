@@ -2,6 +2,7 @@ export * from './types';
 export * from './blockService';
 export * from './entryService';
 export * from './resourceService';
+export * from './resourceCategoryService';
 export * from './uploadService';
 export * from './entryRetentionService';
 export { entryRetentionScheduler, EntryRetentionScheduler } from './entryRetentionScheduler';
