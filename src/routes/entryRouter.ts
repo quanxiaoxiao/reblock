@@ -13,6 +13,12 @@ const EntrySchema = z.object({
   invalidatedAt: z.number().optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
+  uploadConfig: z.object({
+    maxFileSize: z.number().optional(),
+    allowedMimeTypes: z.array(z.string()).optional(),
+    readOnly: z.boolean().optional(),
+    retentionMs: z.number().optional(),
+  }).optional(),
 });
 
 const CreateEntrySchema = z.object({
@@ -21,12 +27,19 @@ const CreateEntrySchema = z.object({
   isDefault: z.boolean().optional(),
   order: z.number().optional(),
   description: z.string().optional(),
+  uploadConfig: z.object({
+    maxFileSize: z.number().int().positive().optional(),
+    allowedMimeTypes: z.array(z.string()).optional(),
+    readOnly: z.boolean().optional(),
+    retentionMs: z.number().int().positive().optional(),
+  }).optional(),
 });
 
 const UploadConfigSchema = z.object({
-  maxFileSize: z.number().optional(),
+  maxFileSize: z.number().int().positive().optional(),
   allowedMimeTypes: z.array(z.string()).optional(),
   readOnly: z.boolean().optional(),
+  retentionMs: z.number().int().positive().optional(),
 }).optional();
 
 const UpdateEntrySchema = z.object({

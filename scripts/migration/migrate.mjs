@@ -23,17 +23,22 @@ import { join } from 'path';
 // Load .env configuration first (before argv)
 // =============================================================================
 
-let MIGRATION_TOKEN = '';
+let API_AUTH_TOKEN = '';
 let SERVER_PORT = '3000'; // default port
 const envPath = join(process.cwd(), '.env');
 if (existsSync(envPath)) {
   const envContent = readFileSync(envPath, 'utf8');
   
-  // Load migration token
-  const tokenMatch = envContent.match(/MIGRATION_API_TOKEN=(.+)/);
-  if (tokenMatch) {
-    MIGRATION_TOKEN = tokenMatch[1].trim();
-  }
+  // Load unified API token (fallback to deprecated tokens)
+  const unifiedTokenMatch = envContent.match(/API_AUTH_TOKEN=(.+)/);
+  const migrationTokenMatch = envContent.match(/MIGRATION_API_TOKEN=(.+)/);
+  const errorsTokenMatch = envContent.match(/ERRORS_API_TOKEN=(.+)/);
+  API_AUTH_TOKEN = (
+    unifiedTokenMatch?.[1]
+    || migrationTokenMatch?.[1]
+    || errorsTokenMatch?.[1]
+    || ''
+  ).trim();
   
   // Load server port
   const portMatch = envContent.match(/SERVER_PORT=(\d+)/);
@@ -243,7 +248,7 @@ async function migrateResource(resource) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-migration-token': MIGRATION_TOKEN
+        'Authorization': `Bearer ${API_AUTH_TOKEN}`,
       },
       body: JSON.stringify(payload)
     });
@@ -267,7 +272,7 @@ async function migrateResource(resource) {
         break;
         
       case 401:
-        error(`  认证失败，请检查 MIGRATION_API_TOKEN`);
+        error('  认证失败，请检查 API_AUTH_TOKEN');
         stats.failed++;
         stats.failedIds.push(`${resourceId}(unauthorized)`);
         break;
@@ -357,8 +362,8 @@ async function main() {
   log(`目标 Entry: ${ENTRY_ALIAS}`);
   log(`并发数: ${CONCURRENCY}`);
   
-  if (!MIGRATION_TOKEN) {
-    error('未找到 MIGRATION_API_TOKEN，请检查 .env 文件');
+  if (!API_AUTH_TOKEN) {
+    error('未找到 API_AUTH_TOKEN，请检查 .env 文件');
     process.exit(1);
   }
   

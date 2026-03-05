@@ -80,6 +80,34 @@ describe('entrySchema', () => {
       const result = createEntrySchema.safeParse(invalidData);
       expect(result.success).toBe(false);
     });
+
+    it('should validate positive retentionMs in uploadConfig', () => {
+      const validData = {
+        body: {
+          name: 'Retention Entry',
+          uploadConfig: {
+            retentionMs: 60000,
+          },
+        },
+      };
+
+      const result = createEntrySchema.safeParse(validData);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject non-positive retentionMs in uploadConfig', () => {
+      const invalidData = {
+        body: {
+          name: 'Retention Entry',
+          uploadConfig: {
+            retentionMs: 0,
+          },
+        },
+      };
+
+      const result = createEntrySchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('updateEntrySchema', () => {
@@ -158,6 +186,38 @@ describe('entrySchema', () => {
         },
         params: {
           id: 'entry-id-1', // not valid ObjectId
+        },
+      };
+
+      const result = updateEntrySchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
+
+    it('should validate positive retentionMs in update uploadConfig', () => {
+      const validData = {
+        body: {
+          uploadConfig: {
+            retentionMs: 1,
+          },
+        },
+        params: {
+          id: VALID_OBJECT_ID,
+        },
+      };
+
+      const result = updateEntrySchema.safeParse(validData);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject string retentionMs in update uploadConfig', () => {
+      const invalidData = {
+        body: {
+          uploadConfig: {
+            retentionMs: 'abc',
+          },
+        },
+        params: {
+          id: VALID_OBJECT_ID,
         },
       };
 

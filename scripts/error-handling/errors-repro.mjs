@@ -49,7 +49,7 @@ loadEnv();
 
 const DEFAULT_SERVER = process.env.SERVER_HOST || 'localhost';
 const DEFAULT_PORT = process.env.SERVER_PORT || '4362';
-const ERROR_API_TOKEN = process.env.ERRORS_API_TOKEN || process.env.MIGRATION_API_TOKEN || '';
+const ERROR_API_TOKEN = process.env.API_AUTH_TOKEN || process.env.ERRORS_API_TOKEN || process.env.MIGRATION_API_TOKEN || '';
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -94,7 +94,7 @@ function getBaseUrl(options) {
 }
 
 function getAuthHeaders() {
-  return ERROR_API_TOKEN ? { 'x-errors-token': ERROR_API_TOKEN } : {};
+  return ERROR_API_TOKEN ? { Authorization: `Bearer ${ERROR_API_TOKEN}` } : {};
 }
 
 function buildPathWithQuery(path, query) {
@@ -188,7 +188,7 @@ function generateHurl(errorId, exported, options) {
   lines.push(`# Summary: ${(exported.summary || 'Unknown').toString().replace(/\n/g, ' ')}`);
   lines.push(`${method} {{BASE_URL}}${path}`);
   if (ERROR_API_TOKEN) {
-    lines.push('x-errors-token: {{ERRORS_TOKEN}}');
+    lines.push('Authorization: Bearer {{API_TOKEN}}');
   }
 
   const headerEntries = Object.entries(headers);
@@ -227,7 +227,7 @@ function runHurl(filePath, options) {
   return new Promise((resolveRun, rejectRun) => {
     const args = [filePath, '--variable', `BASE_URL=${getBaseUrl(options)}`];
     if (ERROR_API_TOKEN) {
-      args.push('--variable', `ERRORS_TOKEN=${ERROR_API_TOKEN}`);
+      args.push('--variable', `API_TOKEN=${ERROR_API_TOKEN}`);
     }
     const child = spawn('hurl', args, {
       stdio: 'inherit',

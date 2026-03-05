@@ -5,7 +5,7 @@
 ################################################################################
 POST {{BASE_URL}}/errors/test/create
 Content-Type: application/json
-x-errors-token: {{ERRORS_TOKEN}}
+Authorization: Bearer {{API_TOKEN}}
 {
   "message": "Test error for acknowledge test"
 }
@@ -17,7 +17,7 @@ error_uuid: jsonpath "$.errorId"
 # Test 2: Query the specific created error in open status
 ################################################################################
 GET {{BASE_URL}}/errors?days=7&status=open&errorId={{error_uuid}}
-x-errors-token: {{ERRORS_TOKEN}}
+Authorization: Bearer {{API_TOKEN}}
 HTTP 200
 [Captures]
 error_id: jsonpath "$.errors[0]._id"
@@ -30,7 +30,7 @@ jsonpath "$.errors[0].errorId" == "{{error_uuid}}"
 ################################################################################
 POST {{BASE_URL}}/errors/{{error_id}}/acknowledge
 Content-Type: application/json
-x-errors-token: {{ERRORS_TOKEN}}
+Authorization: Bearer {{API_TOKEN}}
 {
   "note": "Acknowledged in hurl test"
 }
@@ -42,7 +42,7 @@ jsonpath "$.success" == true
 # Test 4: Verify acknowledged status
 ################################################################################
 GET {{BASE_URL}}/errors/{{error_id}}
-x-errors-token: {{ERRORS_TOKEN}}
+Authorization: Bearer {{API_TOKEN}}
 HTTP 200
 [Asserts]
 jsonpath "$.status" == "acknowledged"

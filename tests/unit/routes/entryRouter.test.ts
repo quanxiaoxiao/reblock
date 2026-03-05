@@ -79,6 +79,20 @@ describe('EntryRouter', () => {
 
       expect(res.status).toBe(400);
     });
+
+    it('should return 400 when retentionMs is non-positive', async () => {
+      const res = await app.request('/entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Retention Entry',
+          uploadConfig: { retentionMs: 0 },
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      expect(entryService.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('GET /entries', () => {
@@ -179,6 +193,19 @@ describe('EntryRouter', () => {
 
       expect(res.status).toBe(409);
       expect(body).toHaveProperty('error', 'alias already exists');
+    });
+
+    it('should return 400 when retentionMs has invalid type', async () => {
+      const res = await app.request('/entries/entry-id-1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uploadConfig: { retentionMs: 'abc' },
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      expect(entryService.update).not.toHaveBeenCalled();
     });
   });
 

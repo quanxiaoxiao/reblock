@@ -5,6 +5,7 @@ import { env } from '../config/env';
 import { migrationService, MigrationError } from '../services/migrationService';
 import { logService } from '../services/logService';
 import { createAdmissionControl, incrementRuntimeCounter } from '../middleware/admissionControl';
+import { createApiAuthMiddleware } from './middlewares/apiAuth';
 
 // Schema definitions
 const ImportResourceSchema = z.object({
@@ -56,6 +57,21 @@ const ErrorResponseSchema = z.object({
   code: z.string().optional(),
 }).openapi('ErrorResponse');
 
+const AuthHeadersSchema = z.object({
+  authorization: z.string().optional().openapi({
+    description: 'Bearer token for internal API authentication',
+    example: 'Bearer your-secret-token',
+  }),
+  'x-migration-token': z.string().optional().openapi({
+    description: 'Deprecated: use Authorization Bearer token instead',
+    example: 'your-secret-token',
+  }),
+  'x-errors-token': z.string().optional().openapi({
+    description: 'Deprecated: use Authorization Bearer token instead',
+    example: 'your-secret-token',
+  }),
+});
+
 // Create router
 const router = new OpenAPIHono();
 const migrationRequestTimeoutMs = 60_000;
@@ -89,36 +105,10 @@ function createRequestController(rawSignal: AbortSignal, timeoutMs: number): {
   };
 }
 
-/** Timing-safe token comparison to prevent timing attacks */
-function safeTokenCompare(a: string, b: string): boolean {
-  try {
-    const bufA = Buffer.from(a);
-    const bufB = Buffer.from(b);
-    if (bufA.length !== bufB.length) return false;
-    return crypto.timingSafeEqual(bufA, bufB);
-  } catch {
-    return false;
-  }
-}
-
-// Authentication middleware
-async function migrationAuthMiddleware(c: Context, next: () => Promise<void>) {
-  // Check if migration API is enabled
-  if (!env.MIGRATION_API_ENABLED) {
-    return c.json({ error: 'Migration API is disabled' }, 403);
-  }
-
-  // Check token with timing-safe comparison
-  const token = c.req.header('x-migration-token');
-  if (!token || !env.MIGRATION_API_TOKEN || !safeTokenCompare(token, env.MIGRATION_API_TOKEN)) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
-  await next();
-}
-
 // Apply auth middleware to all routes
-router.use('*', migrationAuthMiddleware);
+router.use('*', createApiAuthMiddleware({
+  requireMigrationEnabled: true,
+}));
 router.use('*', createAdmissionControl({
   name: 'migration',
   maxInflight: env.MIGRATION_MAX_INFLIGHT,
@@ -148,12 +138,7 @@ router.openapi(
           },
         },
       },
-      headers: z.object({
-        'x-migration-token': z.string().openapi({
-          description: 'Migration API authentication token',
-          example: 'your-secret-token'
-        })
-      })
+      headers: AuthHeadersSchema,
     },
     responses: {
       201: {

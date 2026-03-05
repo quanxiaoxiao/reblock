@@ -16,6 +16,7 @@ if (isTestRuntime) {
   runtimeEnv.MONGO_HOSTNAME ??= 'localhost';
   runtimeEnv.MONGO_DATABASE ??= 'reblock_test';
   runtimeEnv.ENCRYPTION_KEY ??= TEST_DEFAULT_KEY;
+  runtimeEnv.RETENTION_SCHEDULER_ENABLED ??= 'false';
 }
 
 /** Helper: parse string to positive integer with pipe validation */
@@ -52,6 +53,10 @@ const envSchema = z.object({
   CASCADE_DELETE_LOG_DAYS: positiveInt('30'),
   METRICS_SNAPSHOT_INTERVAL_MINUTES: positiveInt('5'),
   METRICS_WINDOW_MINUTES: positiveInt('5'),
+  RETENTION_SCHEDULER_ENABLED: z.string().default('true').transform(v => v === 'true'),
+  RETENTION_SCHEDULER_INTERVAL_MS: positiveInt('300000'),
+  RETENTION_SCHEDULER_LIMIT: positiveInt('1000'),
+  RETENTION_SCHEDULER_LOCK_TTL_MS: positiveInt('600000'),
   UPLOAD_MAX_INFLIGHT: positiveInt('4'),
   UPLOAD_QUEUE_MAX: positiveInt('32'),
   UPLOAD_QUEUE_TIMEOUT_MS: positiveInt('15000'),
@@ -64,6 +69,7 @@ const envSchema = z.object({
 
   // Migration API configuration
   MIGRATION_API_ENABLED: z.string().default('false').transform(v => v === 'true'),
+  API_AUTH_TOKEN: z.string().optional(),
   MIGRATION_API_TOKEN: z.string().optional(),
   ERRORS_API_TOKEN: z.string().optional(),
 }).refine((data) => data.PORT || data.SERVER_PORT, {

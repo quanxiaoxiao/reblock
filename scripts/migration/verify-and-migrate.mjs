@@ -27,14 +27,22 @@ import { createInterface } from 'readline';
 // Load .env configuration
 // =============================================================================
 
-let MIGRATION_TOKEN = process.env.MIGRATION_API_TOKEN;
+let API_AUTH_TOKEN = process.env.API_AUTH_TOKEN || process.env.MIGRATION_API_TOKEN || process.env.ERRORS_API_TOKEN;
 let SERVER_PORT = '3000';
 
 const envPath = join(process.cwd(), '.env');
 if (existsSync(envPath)) {
   const envContent = readFileSync(envPath, 'utf8');
-  const tokenMatch = envContent.match(/MIGRATION_API_TOKEN=(.+)/);
-  if (tokenMatch) MIGRATION_TOKEN = tokenMatch[1].trim();
+  const unifiedTokenMatch = envContent.match(/API_AUTH_TOKEN=(.+)/);
+  const migrationTokenMatch = envContent.match(/MIGRATION_API_TOKEN=(.+)/);
+  const errorsTokenMatch = envContent.match(/ERRORS_API_TOKEN=(.+)/);
+  API_AUTH_TOKEN = (
+    unifiedTokenMatch?.[1]
+    || migrationTokenMatch?.[1]
+    || errorsTokenMatch?.[1]
+    || API_AUTH_TOKEN
+    || ''
+  ).trim();
   const portMatch = envContent.match(/SERVER_PORT=(\d+)/);
   if (portMatch) SERVER_PORT = portMatch[1];
 }
@@ -526,7 +534,7 @@ async function uploadResourceOnce({ resourceId, name, mime, buffer, entryAlias, 
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-migration-token': MIGRATION_TOKEN,
+      'Authorization': `Bearer ${API_AUTH_TOKEN}`,
     },
     body: JSON.stringify(payload),
   });
@@ -912,7 +920,7 @@ async function main() {
   log(`恢复模式: ${RESUME_ENABLED ? 'on' : 'off'}`);
 
   const required = [
-    [MIGRATION_TOKEN, '未找到 MIGRATION_API_TOKEN，请检查 .env 文件'],
+    [API_AUTH_TOKEN, '未找到 API_AUTH_TOKEN，请检查 .env 文件'],
     [RESOURCES_FILE, '请指定 resources JSON 文件: --resources=./resources.json'],
     [IMAGES_FILE, '请指定 images JSON 文件: --images=./images.json'],
     [ENTRY_ALIAS, '请指定目标 entry alias: --entry-alias=<alias>'],

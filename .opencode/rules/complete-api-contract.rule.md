@@ -122,6 +122,7 @@ interface Entry {
     maxFileSize?: number;
     allowedMimeTypes?: string[];
     readOnly: boolean;
+    retentionMs?: number;
   };
   createdAt: number;
   updatedAt: number;
@@ -180,6 +181,7 @@ interface CreateEntryRequest {
     maxFileSize?: number;
     allowedMimeTypes?: string[];
     readOnly?: boolean;
+    retentionMs?: number;
   };
 }
 ```
@@ -191,6 +193,7 @@ interface CreateEntryRequest {
 - `name` is required and trimmed
 - `maxFileSize` - Maximum file size in bytes
 - `allowedMimeTypes` - Array of MIME type patterns (e.g., `["image/*", "video/mp4"]`)
+- `retentionMs` - Optional resource retention window in milliseconds (> 0)
 
 **Response (201):** Created entry object
 
@@ -212,7 +215,8 @@ interface CreateEntryRequest {
   "uploadConfig": {
     "maxFileSize": 10485760,
     "allowedMimeTypes": ["image/*"],
-    "readOnly": false
+    "readOnly": false,
+    "retentionMs": 60000
   }
 }
 ```
@@ -244,6 +248,7 @@ interface UpdateEntryRequest {
     maxFileSize?: number;
     allowedMimeTypes?: string[];
     readOnly?: boolean;
+    retentionMs?: number;
   };
 }
 ```
@@ -292,6 +297,18 @@ DELETE /entries/:id
 |--------|-------------------------|
 | 404    | Entry not found         |
 | 500    | Internal server error   |
+
+---
+
+## Maintenance / Retention (Internal Scheduler)
+
+Retention cleanup is executed by an internal scheduler and is not exposed as a public HTTP trigger endpoint.
+
+Execution model:
+
+- Scheduler interval: every 5 minutes
+- Applies to entries configured with `uploadConfig.retentionMs > 0`
+- Multi-instance deployment uses Mongo-based scheduler lock to ensure single active runner per interval
 
 ---
 
@@ -713,9 +730,20 @@ Currently **NOT implemented**. Future versions may include rate limiting.
 
 ## Authentication
 
-Currently **NOT implemented**. The service is designed for internal use.
+Authentication is applied for internal/maintenance endpoints.
 
-For production deployment, implement authentication middleware (OAuth2, API keys, etc.).
+Primary protocol:
+
+- `Authorization: Bearer <token>`
+
+Configured token resolution order:
+
+- `API_AUTH_TOKEN || ERRORS_API_TOKEN || MIGRATION_API_TOKEN`
+
+Compatibility period:
+
+- Legacy headers `x-errors-token` and `x-migration-token` are still accepted (deprecated).
+- Compatibility with `ERRORS_API_TOKEN` / `MIGRATION_API_TOKEN` remains for one release cycle and will be removed later.
 
 ---
 
@@ -725,7 +753,14 @@ Runtime error tracking and management endpoints.
 
 ### Authentication
 
-All endpoints require `x-errors-token` header when `ERRORS_API_TOKEN` is configured.
+All endpoints accept:
+
+- Preferred: `Authorization: Bearer <token>`
+- Deprecated compatibility: `x-errors-token`, `x-migration-token`
+
+Server token resolution order:
+
+- `API_AUTH_TOKEN || ERRORS_API_TOKEN || MIGRATION_API_TOKEN`
 
 **401 Unauthorized:** Returned when token is missing or invalid.
 

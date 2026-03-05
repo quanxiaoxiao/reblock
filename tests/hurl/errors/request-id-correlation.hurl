@@ -5,7 +5,7 @@
 POST {{BASE_URL}}/errors/test/create
 Content-Type: application/json
 x-request-id: hurl-req-{{timestamp}}
-x-errors-token: {{ERRORS_TOKEN}}
+Authorization: Bearer {{API_TOKEN}}
 {
   "message": "request-id correlation template"
 }
@@ -16,7 +16,7 @@ created_error_uuid: jsonpath "$.errorId"
 
 # Step 2: Query /errors using requestId + errorId filter (deterministic match)
 GET {{BASE_URL}}/errors?days=1&status=open&requestId=hurl-req-{{timestamp}}&errorId={{created_error_uuid}}
-x-errors-token: {{ERRORS_TOKEN}}
+Authorization: Bearer {{API_TOKEN}}
 
 HTTP 200
 [Captures]
@@ -27,7 +27,7 @@ jsonpath "$.errors[0].errorId" == "{{created_error_uuid}}"
 
 # Step 3: Verify details endpoint contains the same requestId context
 GET {{BASE_URL}}/errors/{{error_doc_id}}
-x-errors-token: {{ERRORS_TOKEN}}
+Authorization: Bearer {{API_TOKEN}}
 
 HTTP 200
 [Asserts]

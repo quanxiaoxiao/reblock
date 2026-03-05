@@ -192,10 +192,12 @@ async function deploy() {
     STORAGE_BLOCK_DIR: '/app/storage/blocks',
     STORAGE_LOG_DIR: '/app/storage/_logs',
     
-    // Migration API (optional - auto-generates tokens if not provided)
+    // Migration API (optional)
     MIGRATION_API_ENABLED: true,
-    // MIGRATION_API_TOKEN: 'auto-generated',  // 64-char hex, auto-generated if omitted
-    ERRORS_API_TOKEN: '',     // 64-char hex, auto-generated if omitted
+    API_AUTH_TOKEN: '',       // 64-char hex, auto-generated if omitted
+    // Deprecated compatibility tokens (optional)
+    // MIGRATION_API_TOKEN: '',
+    // ERRORS_API_TOKEN: '',
     
     // Logging configuration (all optional - use defaults if omitted)
     // LOG_TTL_DAYS: 90,
@@ -386,25 +388,14 @@ async function deploy() {
         );
       }
       
-      // Generate MIGRATION_API_TOKEN if enabled but not provided
-      if (finalEnvConfig.MIGRATION_API_ENABLED === true && !finalEnvConfig.MIGRATION_API_TOKEN) {
-        finalEnvConfig.MIGRATION_API_TOKEN = generateSecureToken(64);
-        generatedTokens.push({ 
-          name: 'MIGRATION_API_TOKEN', 
-          value: finalEnvConfig.MIGRATION_API_TOKEN,
+      // Generate unified API_AUTH_TOKEN if not provided
+      if (!finalEnvConfig.API_AUTH_TOKEN) {
+        finalEnvConfig.API_AUTH_TOKEN = generateSecureToken(64);
+        generatedTokens.push({
+          name: 'API_AUTH_TOKEN',
+          value: finalEnvConfig.API_AUTH_TOKEN,
           critical: false,
-          description: '64-char hex token for migration API'
-        });
-      }
-      
-      // Generate ERRORS_API_TOKEN if not provided
-      if (!finalEnvConfig.ERRORS_API_TOKEN) {
-        finalEnvConfig.ERRORS_API_TOKEN = generateSecureToken(64);
-        generatedTokens.push({ 
-          name: 'ERRORS_API_TOKEN', 
-          value: finalEnvConfig.ERRORS_API_TOKEN,
-          critical: false,
-          description: '64-char hex token for errors API'
+          description: '64-char hex token for internal APIs (errors/migration)',
         });
       }
       
@@ -672,4 +663,3 @@ deploy().catch(error => {
   logError(`Unexpected error: ${error.message}`);
   process.exit(1);
 });
-

@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import { randomUUID } from 'crypto';
 import { logService } from './services/logService';
 import { metricsSnapshotService } from './services/metricsSnapshotService';
+import { entryRetentionScheduler } from './services/entryRetentionScheduler';
 
 const port = env.PORT || env.SERVER_PORT || 3000;
 const archiveLockKey = 'log_archive_scheduler';
@@ -93,6 +94,15 @@ if (env.NODE_ENV !== 'test') {
   console.log(`📅 Log archive scheduler initialized (daily at 03:00 ${env.LOG_ARCHIVE_TZ})`);
 }
 
+if (env.RETENTION_SCHEDULER_ENABLED) {
+  entryRetentionScheduler.startScheduler(
+    env.RETENTION_SCHEDULER_INTERVAL_MS,
+    env.RETENTION_SCHEDULER_LIMIT,
+    env.RETENTION_SCHEDULER_LOCK_TTL_MS
+  );
+  console.log(`🧹 Entry retention scheduler initialized (${env.RETENTION_SCHEDULER_INTERVAL_MS} ms interval)`);
+}
+
 // Store server instance for graceful shutdown
 let server: ReturnType<typeof serve>;
 
@@ -110,6 +120,9 @@ async function gracefulShutdown(signal: string): Promise<void> {
   // Stop metrics scheduler
   metricsSnapshotService.stopScheduler();
   console.log('✅ Metrics scheduler stopped');
+
+  entryRetentionScheduler.stopScheduler();
+  console.log('✅ Entry retention scheduler stopped');
 
   // Close HTTP server and wait for in-flight requests to finish
   if (server) {

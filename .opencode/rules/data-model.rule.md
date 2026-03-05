@@ -91,6 +91,7 @@ DATA STRUCTURE UploadConfig:
 - maxFileSize: Number (Optional file size limit)
 - allowedMimeTypes: Array[String] (Optional array of allowed MIME types)
 - readOnly: Boolean (Flag for read-only access, defaults to false)
+- retentionMs: Number (Optional resource retention window in milliseconds, must be > 0)
 ```
 
 ### Fields
@@ -116,6 +117,7 @@ DATA STRUCTURE UploadConfig:
 | `maxFileSize`      | number        | Max file size in bytes (e.g., 10485760 = 10MB) |
 | `allowedMimeTypes` | string[]      | Allowed MIME types (e.g., `["image/*", "video/mp4"]`) |
 | `readOnly`         | boolean       | If true, rejects uploads (403)       |
+| `retentionMs`      | number        | Optional retention window in ms for internal scheduled retention cleanup workflows |
 
 ### Indexes
 

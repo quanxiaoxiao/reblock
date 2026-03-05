@@ -59,6 +59,9 @@ jobs:
       - name: Run unit tests
         run: npm run test
 
+      - name: Check OpenAPI contract baseline
+        run: npm run openapi:check
+
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:

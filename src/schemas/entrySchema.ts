@@ -5,6 +5,7 @@ const uploadConfigSchema = z.object({
   maxFileSize: z.number().int().positive().optional(),
   allowedMimeTypes: z.array(z.string().max(128)).max(100).optional(),
   readOnly: z.boolean().optional(),
+  retentionMs: z.number().int().positive().optional(),
 }).optional();
 
 export const createEntrySchema = z.object({

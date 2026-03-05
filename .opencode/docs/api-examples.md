@@ -62,7 +62,8 @@ curl -X POST "http://localhost:3000/entries" \
     "uploadConfig": {
       "maxFileSize": 10485760,
       "allowedMimeTypes": ["application/pdf", "image/*"],
-      "readOnly": false
+      "readOnly": false,
+      "retentionMs": 60000
     }
   }'
 ```
@@ -81,7 +82,8 @@ curl -X POST "http://localhost:3000/entries" \
   "uploadConfig": {
     "maxFileSize": 10485760,
     "allowedMimeTypes": ["application/pdf", "image/*"],
-    "readOnly": false
+    "readOnly": false,
+    "retentionMs": 60000
   }
 }
 ```
@@ -99,7 +101,8 @@ curl -X PUT "http://localhost:3000/entries/60d21b4667d0d8992e610c85" \
     "description": "Updated description",
     "uploadConfig": {
       "maxFileSize": 52428800,
-      "readOnly": false
+      "readOnly": false,
+      "retentionMs": 120000
     }
   }'
 ```
@@ -118,7 +121,8 @@ curl -X PUT "http://localhost:3000/entries/60d21b4667d0d8992e610c85" \
   "uploadConfig": {
     "maxFileSize": 52428800,
     "allowedMimeTypes": ["application/pdf", "image/*"],
-    "readOnly": false
+    "readOnly": false,
+    "retentionMs": 120000
   }
 }
 ```
@@ -154,11 +158,20 @@ curl -X PATCH "http://localhost:3000/entries/60d21b4667d0d8992e610c85/upload-con
   "uploadConfig": {
     "maxFileSize": 104857600,
     "allowedMimeTypes": ["image/*", "video/*"],
-    "readOnly": false
+    "readOnly": false,
+    "retentionMs": 300000
   },
   "updatedAt": 1772243000000
 }
 ```
+
+### Retention Cleanup Execution (Internal)
+
+Retention cleanup is executed by an internal scheduler (non-HTTP trigger).
+
+- Default cadence: every 5 minutes
+- Applies to entries configured with `uploadConfig.retentionMs`
+- Scheduler enable/interval can be controlled by environment configuration in deployments that expose scheduler toggles
 
 ---
 
@@ -504,12 +517,13 @@ Content-Type: application/json
 ### Migration Payload Too Large (413)
 
 Migration endpoint rejects oversized JSON/base64 payload before expensive processing:
+Preferred auth uses Bearer token. Deprecated compatibility headers (`x-migration-token`, `x-errors-token`) remain available during migration period.
 
 **Request:**
 ```bash
 curl -X POST "http://localhost:3000/migration/resources/6906d8085481cd13472265cd" \
   -H "Content-Type: application/json" \
-  -H "x-migration-token: your-secret-token" \
+  -H "Authorization: Bearer your-api-token-here" \
   -d '{
     "entryAlias": "notes",
     "name": "huge-image.jpg",
@@ -602,7 +616,10 @@ curl -X GET "http://localhost:3000/metrics/runtime"
 
 ## Error API Examples
 
-> **Note:** All `/errors` endpoints require authentication via `x-errors-token` header.
+> **Note:** All `/errors` endpoints require authentication.
+> Preferred header: `Authorization: Bearer <token>`.
+> Deprecated compatibility headers: `x-errors-token`, `x-migration-token`.
+> Token resolution order: `API_AUTH_TOKEN || ERRORS_API_TOKEN || MIGRATION_API_TOKEN`.
 > If no token is configured on the server, all requests return **403 Forbidden**.
 
 ### Acknowledge an Issue
@@ -611,7 +628,7 @@ curl -X GET "http://localhost:3000/metrics/runtime"
 ```bash
 curl -X POST "http://localhost:3000/errors/60d21b4667d0d8992e610c93/acknowledge" \
   -H "Content-Type: application/json" \
-  -H "x-errors-token: your-api-token-here" \
+  -H "Authorization: Bearer your-api-token-here" \
   -d '{
     "note": "Confirmed this is a valid orphaned block",
     "changedBy": "admin-123"
@@ -643,6 +660,7 @@ curl -X POST "http://localhost:3000/errors/60d21b4667d0d8992e610c93/acknowledge"
 ```bash
 curl -X POST "http://localhost:3000/errors/60d21b4667d0d8992e610c93/resolve" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-token-here" \
   -d '{
     "resolution": "Soft deleted the orphaned block via cleanup script",
     "resolvedBy": "cleanup-script",
@@ -684,6 +702,7 @@ curl -X POST "http://localhost:3000/errors/60d21b4667d0d8992e610c93/resolve" \
 ```bash
 curl -X POST "http://localhost:3000/errors/60d21b4667d0d8992e610c93/ignore" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-token-here" \
   -d '{
     "note": "False positive - data was actually consistent",
     "changedBy": "system"

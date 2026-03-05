@@ -36,6 +36,7 @@ export interface IUploadConfig {
   maxFileSize?: number;
   allowedMimeTypes?: string[];
   readOnly?: boolean;
+  retentionMs?: number;
 }
 
 export interface IEntry extends Document {
@@ -67,6 +68,7 @@ const entrySchema = new Schema<IEntry>({
     maxFileSize: { type: Number },
     allowedMimeTypes: [{ type: String }],
     readOnly: { type: Boolean, default: false },
+    retentionMs: { type: Number },
   },
 });
 

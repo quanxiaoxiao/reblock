@@ -1,0 +1,3763 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "Resource Block API",
+    "description": "API for managing blocks, entries, and resources"
+  },
+  "servers": [
+    {
+      "url": "http://localhost/",
+      "description": "Current Server"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "ImportResourceResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "resourceId": {
+            "type": "string"
+          },
+          "isNew": {
+            "type": "boolean"
+          },
+          "blockId": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "success",
+          "resourceId",
+          "isNew",
+          "blockId",
+          "sha256",
+          "size"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "ImportResourceRequest": {
+        "type": "object",
+        "properties": {
+          "entryAlias": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Entry alias for the resource",
+            "example": "notes"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Resource name",
+            "example": "Y86.html"
+          },
+          "mime": {
+            "type": "string",
+            "description": "MIME type",
+            "example": "text/html"
+          },
+          "category": {
+            "type": "string",
+            "description": "Resource category",
+            "example": "documentation"
+          },
+          "description": {
+            "type": "string",
+            "description": "Resource description",
+            "example": "Y86 processor documentation"
+          },
+          "contentBase64": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Base64 encoded file content",
+            "example": "PGh0bWw+..."
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "Resource creation timestamp (milliseconds)",
+            "example": 1772438656186
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "Resource update timestamp (milliseconds)",
+            "example": 1772438656205
+          }
+        },
+        "required": [
+          "entryAlias",
+          "name",
+          "contentBase64"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/docs": {
+      "get": {
+        "tags": [
+          "Documentation"
+        ],
+        "description": "API documentation viewer using Scalar",
+        "responses": {
+          "200": {
+            "description": "API documentation HTML page",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "description": "Health check endpoint",
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "timestamp"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/resource/:id": {
+      "get": {
+        "tags": [
+          "Legacy Compatibility"
+        ],
+        "description": "Get resource metadata in legacy format (backward compatibility)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "612ccc0aca4fb7001ace10cf"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resource metadata in legacy format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "timeCreate": {
+                      "type": "number"
+                    },
+                    "timeUpdate": {
+                      "type": "number"
+                    },
+                    "mime": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "size": {
+                      "type": "number"
+                    },
+                    "entry": {
+                      "type": "string"
+                    },
+                    "hash": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "name",
+                    "timeCreate",
+                    "timeUpdate",
+                    "size",
+                    "entry",
+                    "hash"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resource/:id": {
+      "get": {
+        "tags": [
+          "Legacy Compatibility"
+        ],
+        "description": "Download resource file (legacy compatibility, returns attachment)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "612ccc0aca4fb7001ace10cf"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Byte range for partial content",
+              "example": "bytes=0-1023"
+            },
+            "required": false,
+            "description": "Byte range for partial content",
+            "name": "range",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full file content with Accept-Ranges header"
+          },
+          "206": {
+            "description": "Partial content (range request)"
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resource/:id/preview": {
+      "get": {
+        "tags": [
+          "Legacy Compatibility"
+        ],
+        "description": "Preview resource file inline (legacy compatibility)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "612ccc0aca4fb7001ace10cf"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Byte range for partial content",
+              "example": "bytes=0-1023"
+            },
+            "required": false,
+            "description": "Byte range for partial content",
+            "name": "range",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full file content with Accept-Ranges header"
+          },
+          "206": {
+            "description": "Partial content (range request)"
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/blocks": {
+      "get": {
+        "tags": [
+          "Blocks"
+        ],
+        "description": "Get all blocks with optional pagination",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "20"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "example": "0"
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of blocks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": {
+                            "type": "string"
+                          },
+                          "sha256": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "number"
+                          },
+                          "linkCount": {
+                            "type": "number"
+                          },
+                          "size": {
+                            "type": "number"
+                          },
+                          "isInvalid": {
+                            "type": "boolean"
+                          },
+                          "invalidatedAt": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "_id",
+                          "sha256",
+                          "createdAt",
+                          "updatedAt",
+                          "linkCount"
+                        ]
+                      }
+                    },
+                    "total": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "offset": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "total"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/blocks/:id": {
+      "get": {
+        "tags": [
+          "Blocks"
+        ],
+        "description": "Get a block by ID",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Block found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "linkCount": {
+                      "type": "number"
+                    },
+                    "size": {
+                      "type": "number"
+                    },
+                    "isInvalid": {
+                      "type": "boolean"
+                    },
+                    "invalidatedAt": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "sha256",
+                    "createdAt",
+                    "updatedAt",
+                    "linkCount"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Block not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/entries": {
+      "post": {
+        "tags": [
+          "Entries"
+        ],
+        "description": "Create a new entry",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "alias": {
+                    "type": "string"
+                  },
+                  "isDefault": {
+                    "type": "boolean"
+                  },
+                  "order": {
+                    "type": "number"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "uploadConfig": {
+                    "type": "object",
+                    "properties": {
+                      "maxFileSize": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "exclusiveMinimum": true
+                      },
+                      "allowedMimeTypes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "readOnly": {
+                        "type": "boolean"
+                      },
+                      "retentionMs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "exclusiveMinimum": true
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Entry created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "alias": {
+                      "type": "string"
+                    },
+                    "isDefault": {
+                      "type": "boolean"
+                    },
+                    "order": {
+                      "type": "number"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "isInvalid": {
+                      "type": "boolean"
+                    },
+                    "invalidatedAt": {
+                      "type": "number"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "uploadConfig": {
+                      "type": "object",
+                      "properties": {
+                        "maxFileSize": {
+                          "type": "number"
+                        },
+                        "allowedMimeTypes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "readOnly": {
+                          "type": "boolean"
+                        },
+                        "retentionMs": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "name",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Alias already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Entries"
+        ],
+        "description": "Get all entries with optional pagination",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "20"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "example": "0"
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "alias": {
+                            "type": "string"
+                          },
+                          "isDefault": {
+                            "type": "boolean"
+                          },
+                          "order": {
+                            "type": "number"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "isInvalid": {
+                            "type": "boolean"
+                          },
+                          "invalidatedAt": {
+                            "type": "number"
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "number"
+                          },
+                          "uploadConfig": {
+                            "type": "object",
+                            "properties": {
+                              "maxFileSize": {
+                                "type": "number"
+                              },
+                              "allowedMimeTypes": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "readOnly": {
+                                "type": "boolean"
+                              },
+                              "retentionMs": {
+                                "type": "number"
+                              }
+                            }
+                          }
+                        },
+                        "required": [
+                          "_id",
+                          "name",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "total": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "offset": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "total"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/entries/:id": {
+      "get": {
+        "tags": [
+          "Entries"
+        ],
+        "description": "Get an entry by ID",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entry found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "alias": {
+                      "type": "string"
+                    },
+                    "isDefault": {
+                      "type": "boolean"
+                    },
+                    "order": {
+                      "type": "number"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "isInvalid": {
+                      "type": "boolean"
+                    },
+                    "invalidatedAt": {
+                      "type": "number"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "uploadConfig": {
+                      "type": "object",
+                      "properties": {
+                        "maxFileSize": {
+                          "type": "number"
+                        },
+                        "allowedMimeTypes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "readOnly": {
+                          "type": "boolean"
+                        },
+                        "retentionMs": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "name",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Entry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Entries"
+        ],
+        "description": "Update an entry by ID",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "alias": {
+                    "type": "string"
+                  },
+                  "isDefault": {
+                    "type": "boolean"
+                  },
+                  "order": {
+                    "type": "number"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "uploadConfig": {
+                    "type": "object",
+                    "properties": {
+                      "maxFileSize": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "exclusiveMinimum": true
+                      },
+                      "allowedMimeTypes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "readOnly": {
+                        "type": "boolean"
+                      },
+                      "retentionMs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "exclusiveMinimum": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Entry updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "alias": {
+                      "type": "string"
+                    },
+                    "isDefault": {
+                      "type": "boolean"
+                    },
+                    "order": {
+                      "type": "number"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "isInvalid": {
+                      "type": "boolean"
+                    },
+                    "invalidatedAt": {
+                      "type": "number"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "uploadConfig": {
+                      "type": "object",
+                      "properties": {
+                        "maxFileSize": {
+                          "type": "number"
+                        },
+                        "allowedMimeTypes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "readOnly": {
+                          "type": "boolean"
+                        },
+                        "retentionMs": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "name",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Entry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Alias already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Entries"
+        ],
+        "description": "Delete an entry by ID",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Entry deleted successfully"
+          },
+          "404": {
+            "description": "Entry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resources": {
+      "post": {
+        "tags": [
+          "Resources"
+        ],
+        "description": "Create a new resource",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "block": {
+                    "type": "string"
+                  },
+                  "mime": {
+                    "type": "string"
+                  },
+                  "entry": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "block",
+                  "entry"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resource created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "block": {
+                      "type": "string"
+                    },
+                    "mime": {
+                      "type": "string"
+                    },
+                    "entry": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string"
+                    },
+                    "isInvalid": {
+                      "type": "boolean"
+                    },
+                    "invalidatedAt": {
+                      "type": "number"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "clientIp": {
+                      "type": "string"
+                    },
+                    "userAgent": {
+                      "type": "string"
+                    },
+                    "uploadDuration": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "block",
+                    "entry",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Resources"
+        ],
+        "description": "Get all resources",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "10"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "example": "0"
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter resources by entry alias",
+              "example": "some"
+            },
+            "required": false,
+            "description": "Filter resources by entry alias",
+            "name": "entryAlias",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of resources with pagination info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": {
+                            "type": "string"
+                          },
+                          "block": {
+                            "type": "string"
+                          },
+                          "mime": {
+                            "type": "string"
+                          },
+                          "entry": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "sha256": {
+                            "type": "string"
+                          },
+                          "isInvalid": {
+                            "type": "boolean"
+                          },
+                          "invalidatedAt": {
+                            "type": "number"
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "number"
+                          },
+                          "clientIp": {
+                            "type": "string"
+                          },
+                          "userAgent": {
+                            "type": "string"
+                          },
+                          "uploadDuration": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "_id",
+                          "block",
+                          "entry",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "total": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "offset": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "total"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resources/:id/block": {
+      "patch": {
+        "tags": [
+          "Resources"
+        ],
+        "description": "Update resource block while keeping resource ID stable",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "newBlockId": {
+                    "type": "string"
+                  },
+                  "changedBy": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "expectedUpdatedAt": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "newBlockId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Block updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "block": {
+                      "type": "string"
+                    },
+                    "mime": {
+                      "type": "string"
+                    },
+                    "entry": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string"
+                    },
+                    "isInvalid": {
+                      "type": "boolean"
+                    },
+                    "invalidatedAt": {
+                      "type": "number"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "clientIp": {
+                      "type": "string"
+                    },
+                    "userAgent": {
+                      "type": "string"
+                    },
+                    "uploadDuration": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "block",
+                    "entry",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource or block not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resources/:id/history": {
+      "get": {
+        "tags": [
+          "Resources"
+        ],
+        "description": "Get block change history for a resource",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "example": "50"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "example": "0"
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resource history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": {
+                            "type": "string"
+                          },
+                          "resourceId": {
+                            "type": "string"
+                          },
+                          "fromBlockId": {
+                            "type": "string"
+                          },
+                          "toBlockId": {
+                            "type": "string"
+                          },
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "swap",
+                              "rollback"
+                            ]
+                          },
+                          "changedAt": {
+                            "type": "number"
+                          },
+                          "changedBy": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "requestId": {
+                            "type": "string"
+                          },
+                          "rollbackable": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "_id",
+                          "resourceId",
+                          "fromBlockId",
+                          "toBlockId",
+                          "action",
+                          "changedAt",
+                          "rollbackable"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "total",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid resource id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resources/:id/rollback": {
+      "post": {
+        "tags": [
+          "Resources"
+        ],
+        "description": "Rollback resource block to previous block from a history record",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "historyId": {
+                    "type": "string"
+                  },
+                  "changedBy": {
+                    "type": "string"
+                  },
+                  "requestId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "historyId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rollback succeeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "block": {
+                      "type": "string"
+                    },
+                    "mime": {
+                      "type": "string"
+                    },
+                    "entry": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string"
+                    },
+                    "isInvalid": {
+                      "type": "boolean"
+                    },
+                    "invalidatedAt": {
+                      "type": "number"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "clientIp": {
+                      "type": "string"
+                    },
+                    "userAgent": {
+                      "type": "string"
+                    },
+                    "uploadDuration": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "block",
+                    "entry",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "History not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resources/:id": {
+      "get": {
+        "tags": [
+          "Resources"
+        ],
+        "description": "Get a resource by ID",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resource found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "block": {
+                      "type": "string"
+                    },
+                    "mime": {
+                      "type": "string"
+                    },
+                    "entry": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string"
+                    },
+                    "isInvalid": {
+                      "type": "boolean"
+                    },
+                    "invalidatedAt": {
+                      "type": "number"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "clientIp": {
+                      "type": "string"
+                    },
+                    "userAgent": {
+                      "type": "string"
+                    },
+                    "uploadDuration": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "block",
+                    "entry",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Resources"
+        ],
+        "description": "Update a resource by ID",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "block": {
+                    "type": "string"
+                  },
+                  "mime": {
+                    "type": "string"
+                  },
+                  "entry": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resource updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "block": {
+                      "type": "string"
+                    },
+                    "mime": {
+                      "type": "string"
+                    },
+                    "entry": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string"
+                    },
+                    "isInvalid": {
+                      "type": "boolean"
+                    },
+                    "invalidatedAt": {
+                      "type": "number"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "clientIp": {
+                      "type": "string"
+                    },
+                    "userAgent": {
+                      "type": "string"
+                    },
+                    "uploadDuration": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "block",
+                    "entry",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Resources"
+        ],
+        "description": "Delete a resource by ID",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Resource deleted successfully"
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resources/:id/download": {
+      "get": {
+        "tags": [
+          "Resources"
+        ],
+        "description": "Download a resource file with optional range support for resumable downloads and video streaming",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "507f1f77bcf86cd799439011"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Display inline (for video/audio playback)",
+              "example": "true"
+            },
+            "required": false,
+            "description": "Display inline (for video/audio playback)",
+            "name": "inline",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Byte range for partial content (e.g., bytes=0-499)",
+              "example": "bytes=0-1023"
+            },
+            "required": false,
+            "description": "Byte range for partial content (e.g., bytes=0-499)",
+            "name": "range",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full file content with Accept-Ranges: bytes header"
+          },
+          "206": {
+            "description": "Partial content (range request) with Content-Range header"
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "Range Not Satisfiable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error (file missing, size mismatch)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upload/{alias}?": {
+      "post": {
+        "tags": [
+          "Upload"
+        ],
+        "description": "Upload a file to an entry by alias. If no alias provided, uses the default entry.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "my-entry-alias"
+            },
+            "required": false,
+            "name": "alias",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "example": "my-file.txt",
+              "description": "The original filename of the uploaded file"
+            },
+            "required": false,
+            "description": "The original filename of the uploaded file",
+            "name": "name",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "File uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "block": {
+                      "type": "string"
+                    },
+                    "entry": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "mime": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "lastAccessedAt": {
+                      "type": "number"
+                    },
+                    "isInvalid": {
+                      "type": "boolean"
+                    },
+                    "invalidatedAt": {
+                      "type": "number"
+                    },
+                    "clientIp": {
+                      "type": "string"
+                    },
+                    "userAgent": {
+                      "type": "string"
+                    },
+                    "uploadDuration": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "block",
+                    "entry",
+                    "name",
+                    "description",
+                    "createdAt",
+                    "updatedAt",
+                    "lastAccessedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Entry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/errors": {
+      "get": {
+        "tags": [
+          "Errors"
+        ],
+        "description": "List runtime errors (500 errors)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "default": "7"
+            },
+            "required": false,
+            "name": "days",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "acknowledged",
+                "resolved",
+                "all"
+              ],
+              "default": "open"
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "default": "false"
+            },
+            "required": false,
+            "name": "includeResolved",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "path",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "method",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "errorName",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "errorId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "requestId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "fingerprint",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "timestamp"
+              ],
+              "default": "timestamp"
+            },
+            "required": false,
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            },
+            "required": false,
+            "name": "order",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "default": "100"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "default": "0"
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Bearer token for internal API authentication",
+              "example": "Bearer your-secret-token"
+            },
+            "required": false,
+            "description": "Bearer token for internal API authentication",
+            "name": "authorization",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-errors-token",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-migration-token",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of runtime errors",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "number"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": {
+                            "type": "string"
+                          },
+                          "errorId": {
+                            "type": "string"
+                          },
+                          "requestId": {
+                            "type": "string"
+                          },
+                          "fingerprint": {
+                            "type": "string"
+                          },
+                          "timestamp": {
+                            "type": "number"
+                          },
+                          "occurrenceCount": {
+                            "type": "number"
+                          },
+                          "firstSeenAt": {
+                            "type": "number"
+                          },
+                          "lastSeenAt": {
+                            "type": "number"
+                          },
+                          "level": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "details": {
+                            "type": "object",
+                            "properties": {
+                              "errorId": {
+                                "type": "string"
+                              },
+                              "requestId": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "method": {
+                                "type": "string"
+                              },
+                              "errorMessage": {
+                                "type": "string"
+                              },
+                              "errorName": {
+                                "type": "string"
+                              },
+                              "stack": {
+                                "type": "string"
+                              },
+                              "clientIp": {
+                                "type": "string"
+                              }
+                            },
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          },
+                          "suggestedAction": {
+                            "type": "string"
+                          },
+                          "resolvedAt": {
+                            "type": "number"
+                          },
+                          "resolution": {
+                            "type": "string"
+                          },
+                          "resolvedBy": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "_id",
+                          "timestamp",
+                          "level",
+                          "category",
+                          "status",
+                          "details"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "total",
+                    "errors"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/errors/{id}": {
+      "get": {
+        "tags": [
+          "Errors"
+        ],
+        "description": "Get error detail by ID",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "69a23a307ffd3487af73c550"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Bearer token for internal API authentication",
+              "example": "Bearer your-secret-token"
+            },
+            "required": false,
+            "description": "Bearer token for internal API authentication",
+            "name": "authorization",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-errors-token",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-migration-token",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Error detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "errorId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "fingerprint": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "number"
+                    },
+                    "occurrenceCount": {
+                      "type": "number"
+                    },
+                    "firstSeenAt": {
+                      "type": "number"
+                    },
+                    "lastSeenAt": {
+                      "type": "number"
+                    },
+                    "level": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "properties": {
+                        "errorId": {
+                          "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "method": {
+                          "type": "string"
+                        },
+                        "clientIp": {
+                          "type": "string"
+                        },
+                        "errorMessage": {
+                          "type": "string"
+                        },
+                        "errorName": {
+                          "type": "string"
+                        },
+                        "stack": {
+                          "type": "string"
+                        },
+                        "cause": {
+                          "type": "string"
+                        },
+                        "query": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "params": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "headers": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "body": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "errorId",
+                        "path",
+                        "method",
+                        "errorMessage"
+                      ],
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "suggestedAction": {
+                      "type": "string"
+                    },
+                    "resolvedAt": {
+                      "type": "number"
+                    },
+                    "resolution": {
+                      "type": "string"
+                    },
+                    "resolvedBy": {
+                      "type": "string"
+                    },
+                    "context": {
+                      "type": "object",
+                      "properties": {
+                        "detectedBy": {
+                          "type": "string"
+                        },
+                        "environment": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "userAgent": {
+                          "type": "string"
+                        },
+                        "stackTrace": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "statusHistory": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          },
+                          "changedAt": {
+                            "type": "number"
+                          },
+                          "changedBy": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status",
+                          "changedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "timestamp",
+                    "level",
+                    "category",
+                    "status",
+                    "details"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/errors/{id}/export": {
+      "get": {
+        "tags": [
+          "Errors"
+        ],
+        "description": "Export error in AI-friendly format for debugging",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "69a23a307ffd3487af73c550"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Bearer token for internal API authentication",
+              "example": "Bearer your-secret-token"
+            },
+            "required": false,
+            "description": "Bearer token for internal API authentication",
+            "name": "authorization",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-errors-token",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-migration-token",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AI-friendly error export",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errorId": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "reproduction": {
+                      "type": "object",
+                      "properties": {
+                        "method": {
+                          "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "expectedStatus": {
+                          "type": "number"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        },
+                        "headers": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "query": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "params": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "body": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "method",
+                        "path",
+                        "timestamp"
+                      ]
+                    },
+                    "stackTrace": {
+                      "type": "string"
+                    },
+                    "suggestedAction": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "resolvedAt": {
+                      "type": "number"
+                    },
+                    "resolution": {
+                      "type": "string"
+                    },
+                    "resolvedBy": {
+                      "type": "string"
+                    },
+                    "fixedVersion": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "errorId",
+                    "summary",
+                    "reproduction",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/errors/{id}/resolve": {
+      "post": {
+        "tags": [
+          "Errors"
+        ],
+        "description": "Mark error as resolved with resolution notes",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "69a23a307ffd3487af73c550"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Bearer token for internal API authentication",
+              "example": "Bearer your-secret-token"
+            },
+            "required": false,
+            "description": "Bearer token for internal API authentication",
+            "name": "authorization",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-errors-token",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-migration-token",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "resolution": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "fixedVersion": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "resolution"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Error resolved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/errors/{id}/acknowledge": {
+      "post": {
+        "tags": [
+          "Errors"
+        ],
+        "description": "Acknowledge an error",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "69a23a307ffd3487af73c550"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Bearer token for internal API authentication",
+              "example": "Bearer your-secret-token"
+            },
+            "required": false,
+            "description": "Bearer token for internal API authentication",
+            "name": "authorization",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-errors-token",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-migration-token",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Error acknowledged successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/errors/test/create": {
+      "post": {
+        "tags": [
+          "Errors"
+        ],
+        "description": "Create a test error entry (development/test only)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Bearer token for internal API authentication",
+              "example": "Bearer your-secret-token"
+            },
+            "required": false,
+            "description": "Bearer token for internal API authentication",
+            "name": "authorization",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-errors-token",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-migration-token",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "default": "Test error"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Test error created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "errorId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "errorId",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed in production",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics/current": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "description": "Get transfer metrics snapshot for the recent window (minutes)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "5",
+              "description": "Window length in minutes (1-60)"
+            },
+            "required": false,
+            "description": "Window length in minutes (1-60)",
+            "name": "minutes",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current rolling metrics snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "windowStart": {
+                      "type": "number"
+                    },
+                    "windowEnd": {
+                      "type": "number"
+                    },
+                    "windowMinutes": {
+                      "type": "number"
+                    },
+                    "uploadCount": {
+                      "type": "number"
+                    },
+                    "downloadCount": {
+                      "type": "number"
+                    },
+                    "uploadBytes": {
+                      "type": "number"
+                    },
+                    "downloadBytes": {
+                      "type": "number"
+                    },
+                    "uploadInterruptedCount": {
+                      "type": "number"
+                    },
+                    "downloadInterruptedCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "windowStart",
+                    "windowEnd",
+                    "windowMinutes",
+                    "uploadCount",
+                    "downloadCount",
+                    "uploadBytes",
+                    "downloadBytes",
+                    "uploadInterruptedCount",
+                    "downloadInterruptedCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics/runtime": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "description": "Get runtime overload protection metrics (admission control and counters)",
+        "responses": {
+          "200": {
+            "description": "Runtime overload metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "timestamp": {
+                      "type": "number"
+                    },
+                    "admission": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "maxInflight": {
+                            "type": "number"
+                          },
+                          "queueMax": {
+                            "type": "number"
+                          },
+                          "queueTimeoutMs": {
+                            "type": "number"
+                          },
+                          "inflight": {
+                            "type": "number"
+                          },
+                          "queued": {
+                            "type": "number"
+                          },
+                          "admittedTotal": {
+                            "type": "number"
+                          },
+                          "queuedTotal": {
+                            "type": "number"
+                          },
+                          "rejectedTotal": {
+                            "type": "number"
+                          },
+                          "rejectedQueueFull": {
+                            "type": "number"
+                          },
+                          "rejectedQueueTimeout": {
+                            "type": "number"
+                          },
+                          "totalQueueWaitMs": {
+                            "type": "number"
+                          },
+                          "maxQueueWaitMs": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "maxInflight",
+                          "queueMax",
+                          "queueTimeoutMs",
+                          "inflight",
+                          "queued",
+                          "admittedTotal",
+                          "queuedTotal",
+                          "rejectedTotal",
+                          "rejectedQueueFull",
+                          "rejectedQueueTimeout",
+                          "totalQueueWaitMs",
+                          "maxQueueWaitMs"
+                        ]
+                      }
+                    },
+                    "counters": {
+                      "type": "object",
+                      "properties": {
+                        "migrationPayloadTooLargeTotal": {
+                          "type": "number"
+                        },
+                        "requestTimeoutTotal": {
+                          "type": "number"
+                        },
+                        "requestAbortedTotal": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "migrationPayloadTooLargeTotal",
+                        "requestTimeoutTotal",
+                        "requestAbortedTotal"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "timestamp",
+                    "admission",
+                    "counters"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/migration/resources/:legacyId": {
+      "post": {
+        "tags": [
+          "Migration (Internal)"
+        ],
+        "description": "Import a resource with a legacy ID from an old system. This endpoint is for data migration only.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Legacy resource ID (must be a valid MongoDB ObjectId)",
+              "example": "6906d8085481cd13472265cd"
+            },
+            "required": true,
+            "description": "Legacy resource ID (must be a valid MongoDB ObjectId)",
+            "name": "legacyId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Bearer token for internal API authentication",
+              "example": "Bearer your-secret-token"
+            },
+            "required": false,
+            "description": "Bearer token for internal API authentication",
+            "name": "authorization",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-migration-token",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Deprecated: use Authorization Bearer token instead",
+              "example": "your-secret-token"
+            },
+            "required": false,
+            "description": "Deprecated: use Authorization Bearer token instead",
+            "name": "x-errors-token",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportResourceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resource already exists (idempotent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResourceResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Resource imported successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResourceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - migration API disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Entry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - resource ID already exists with different content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

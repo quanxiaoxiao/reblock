@@ -2,7 +2,7 @@
 /**
  * OpenAPI Export Script
  * 
- * Exports the OpenAPI specification from the running application
+ * Exports the OpenAPI specification directly from the app instance
  * and saves it to openapi.json for version control and documentation.
  * 
  * Usage:
@@ -12,7 +12,8 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { spawnSync } from 'child_process';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -20,41 +21,68 @@ dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
-
-const API_PORT = process.env.PORT || 3000;
-const API_HOST = process.env.HOST || 'localhost';
-const OPENAPI_URL = `http://${API_HOST}:${API_PORT}/openapi.json`;
 const OUTPUT_FILE = path.join(projectRoot, 'openapi.json');
+const DIST_APP_FILE = path.join(projectRoot, 'dist', 'app.js');
+
+function runBuild() {
+  console.log('🔧 Building project for OpenAPI export...');
+  const result = spawnSync('npm', ['run', '-s', 'build'], {
+    cwd: projectRoot,
+    stdio: 'inherit',
+    env: process.env,
+  });
+
+  if (result.status !== 0) {
+    console.error('❌ Build failed, cannot export OpenAPI spec');
+    process.exit(result.status || 1);
+  }
+}
+
+async function generateSpec() {
+  // Keep docs route available when environment is not explicitly set.
+  if (!process.env.NODE_ENV) {
+    process.env.NODE_ENV = 'development';
+  }
+
+  runBuild();
+
+  const appModulePath = `${pathToFileURL(DIST_APP_FILE).href}?ts=${Date.now()}`;
+  const appModule = await import(appModulePath);
+  const app = appModule.default?.fetch
+    ? appModule.default
+    : appModule.default?.default;
+
+  if (!app || typeof app.fetch !== 'function') {
+    throw new Error('Failed to load app instance from dist/app.js');
+  }
+
+  const response = await app.fetch(new Request('http://localhost/openapi.json'));
+  if (!response.ok) {
+    throw new Error(`Failed to generate OpenAPI spec: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+}
 
 async function exportOpenAPI() {
   console.log('📄 Exporting OpenAPI specification...');
-  console.log(`   URL: ${OPENAPI_URL}`);
-  
+
   try {
-    const response = await fetch(OPENAPI_URL);
-    
-    if (!response.ok) {
-      console.error(`❌ Failed to fetch OpenAPI spec: ${response.status} ${response.statusText}`);
-      console.error('   Make sure the server is running (npm run dev or npm start)');
-      process.exit(1);
-    }
-    
-    const spec = await response.json();
-    
+    const spec = await generateSpec();
+
     // Pretty print with 2-space indentation
     const specJson = JSON.stringify(spec, null, 2);
-    
+
     // Write to file
     await fs.writeFile(OUTPUT_FILE, specJson, 'utf-8');
-    
+
     console.log(`✅ OpenAPI spec exported to: ${path.relative(projectRoot, OUTPUT_FILE)}`);
     console.log(`   Paths: ${Object.keys(spec.paths || {}).length}`);
     console.log(`   Schemas: ${Object.keys(spec.components?.schemas || {}).length}`);
-    
+
     return spec;
   } catch (error) {
     console.error('❌ Error exporting OpenAPI spec:', error.message);
-    console.error('   Make sure the server is running (npm run dev or npm start)');
     process.exit(1);
   }
 }
@@ -66,16 +94,10 @@ async function checkOpenAPI() {
     // Read current file
     const currentContent = await fs.readFile(OUTPUT_FILE, 'utf-8');
     const currentSpec = JSON.parse(currentContent);
-    
-    // Fetch latest spec
-    const response = await fetch(OPENAPI_URL);
-    if (!response.ok) {
-      console.error(`❌ Failed to fetch OpenAPI spec: ${response.status} ${response.statusText}`);
-      process.exit(1);
-    }
-    
-    const latestSpec = await response.json();
-    
+
+    // Generate latest spec
+    const latestSpec = await generateSpec();
+
     // Compare (remove servers field as it may differ)
     const currentCopy = { ...currentSpec };
     const latestCopy = { ...latestSpec };

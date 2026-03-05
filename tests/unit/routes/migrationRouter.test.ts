@@ -6,6 +6,7 @@ import { migrationService } from '../../../src/services/migrationService';
 vi.mock('../../../src/config/env', () => ({
   env: {
     MIGRATION_API_ENABLED: true,
+    API_AUTH_TOKEN: 'test-api-token',
     MIGRATION_API_TOKEN: 'test-migration-token',
     MIGRATION_MAX_INFLIGHT: 2,
     MIGRATION_QUEUE_MAX: 4,
@@ -52,7 +53,7 @@ describe('MigrationRouter', () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-migration-token': 'test-migration-token',
+        'authorization': 'Bearer test-api-token',
         'x-content-length': '9999',
       },
       body: JSON.stringify({
@@ -79,7 +80,7 @@ describe('MigrationRouter', () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-migration-token': 'test-migration-token',
+        'authorization': 'Bearer test-api-token',
       },
       body: JSON.stringify(payload),
     });
@@ -113,7 +114,7 @@ describe('MigrationRouter', () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-migration-token': 'test-migration-token',
+        'authorization': 'Bearer test-api-token',
       },
       body: JSON.stringify(payload),
     });
@@ -123,5 +124,39 @@ describe('MigrationRouter', () => {
     expect(body.success).toBe(true);
     expect(body.resourceId).toBe('6906d8085481cd13472265cf');
     expect(migrationService.importResource).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts deprecated x-migration-token header during compatibility period', async () => {
+    vi.mocked(migrationService.importResource).mockResolvedValue({
+      isNew: false,
+      resource: {
+        _id: { toString: () => '6906d8085481cd13472265d1' },
+      } as any,
+      block: {
+        _id: { toString: () => '6906d8085481cd13472265d2' },
+        sha256: 'def456',
+        size: 20,
+      } as any,
+    });
+
+    const payload = {
+      entryAlias: 'notes',
+      name: 'legacy-header.jpg',
+      contentBase64: 'aGVsbG8=',
+    };
+
+    const res = await app.request('/migration/resources/6906d8085481cd13472265d1', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-migration-token': 'test-api-token',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.isNew).toBe(false);
   });
 });

@@ -5,6 +5,7 @@
 - [ ] directory matches OpenAPI tag
 - [ ] operation mapped to correct filename
 - [ ] tests grouped by operation
+- [ ] maintenance/business actions use explicit action file (domain-specific, non-hardcoded example)
 
 ---
 
@@ -13,6 +14,7 @@
 - [ ] endpoint exists in OpenAPI
 - [ ] status codes validated
 - [ ] response schema asserted
+- [ ] if contract-first red tests are used, expected pre-implementation failure is documented in README
 
 ---
 
@@ -31,6 +33,7 @@
 
 - [ ] captures used for cross-request validation
 - [ ] pagination deterministic
+- [ ] avoid global-count assertions for mutation workflows; prefer assertions tied to captured ids
 
 ---
 
@@ -38,4 +41,3 @@
 
 - [ ] created resources removed
 - [ ] final 404 verified
-

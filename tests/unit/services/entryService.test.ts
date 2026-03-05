@@ -480,6 +480,33 @@ describe('EntryService', () => {
       expect(result?.uploadConfig?.readOnly).toBe(true);
     });
 
+    it('should update uploadConfig with retentionMs', async () => {
+      const existingEntry = {
+        _id: 'entry-id-1',
+        name: 'Entry 1',
+        isInvalid: false,
+      };
+
+      const updatedEntry = {
+        ...existingEntry,
+        uploadConfig: {
+          retentionMs: 60000,
+        },
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(Entry.findOne).mockResolvedValue(existingEntry as never);
+      vi.mocked(Entry.findByIdAndUpdate).mockResolvedValue(updatedEntry as never);
+
+      const result = await service.update('entry-id-1', {
+        uploadConfig: { retentionMs: 60000 },
+      });
+
+      expect(result?.uploadConfig?.retentionMs).toBe(60000);
+      const updateArg = vi.mocked(Entry.findByIdAndUpdate).mock.calls[0][1] as Record<string, unknown>;
+      expect(updateArg.uploadConfig).toEqual({ retentionMs: 60000 });
+    });
+
     it('should update uploadConfig with complete configuration', async () => {
       const existingEntry = {
         _id: 'entry-id-1',

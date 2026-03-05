@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { logService } from '../services/logService';
 import { IssueStatus, LogCategory, LogLevel, DataLossRisk } from '../models/logEntry';
 import { env } from '../config/env';
+import { createApiAuthMiddleware } from './middlewares/apiAuth';
 
 const ErrorListItemSchema = z.object({
   _id: z.string(),
@@ -110,41 +111,25 @@ const ErrorSchema = z.object({
   error: z.string(),
 });
 
+const AuthHeadersSchema = z.object({
+  authorization: z.string().optional().openapi({
+    description: 'Bearer token for internal API authentication',
+    example: 'Bearer your-secret-token',
+  }),
+  'x-errors-token': z.string().optional().openapi({
+    description: 'Deprecated: use Authorization Bearer token instead',
+    example: 'your-secret-token',
+  }),
+  'x-migration-token': z.string().optional().openapi({
+    description: 'Deprecated: use Authorization Bearer token instead',
+    example: 'your-secret-token',
+  }),
+});
+
 const router = new OpenAPIHono();
-
-/** Timing-safe token comparison to prevent timing attacks */
-function safeTokenCompare(a: string, b: string): boolean {
-  try {
-    const bufA = Buffer.from(a);
-    const bufB = Buffer.from(b);
-    if (bufA.length !== bufB.length) return false;
-    return crypto.timingSafeEqual(bufA, bufB);
-  } catch {
-    return false;
-  }
-}
-
-async function errorsAuthMiddleware(c: Context, next: () => Promise<void>) {
-  const configuredToken = env.ERRORS_API_TOKEN || env.MIGRATION_API_TOKEN;
-  if (!configuredToken) {
-    // No token configured — reject all requests instead of silently allowing access
-    return c.json({ error: 'Errors API token not configured on server' }, 403);
-  }
-
-  const xErrorsToken = c.req.header('x-errors-token');
-  const xMigrationToken = c.req.header('x-migration-token');
-  const authHeader = c.req.header('authorization');
-  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined;
-
-  const provided = xErrorsToken || xMigrationToken || bearerToken;
-  if (!provided || !safeTokenCompare(provided, configuredToken)) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
-  await next();
-}
-
-router.use('*', errorsAuthMiddleware);
+router.use('*', createApiAuthMiddleware({
+  tokenNotConfiguredMessage: 'Errors API token not configured on server',
+}));
 
 // GET /errors - List runtime errors
 router.openapi(
@@ -154,6 +139,7 @@ router.openapi(
     tags: ['Errors'],
     description: 'List runtime errors (500 errors)',
     request: {
+      headers: AuthHeadersSchema,
       query: ErrorListQuerySchema,
     },
     responses: {
@@ -270,6 +256,7 @@ router.openapi(
     tags: ['Errors'],
     description: 'Get error detail by ID',
     request: {
+      headers: AuthHeadersSchema,
       params: z.object({
         id: z.string().openapi({
           param: {
@@ -320,6 +307,7 @@ router.openapi(
     tags: ['Errors'],
     description: 'Export error in AI-friendly format for debugging',
     request: {
+      headers: AuthHeadersSchema,
       params: z.object({
         id: z.string().openapi({
           param: {
@@ -394,6 +382,7 @@ router.openapi(
     tags: ['Errors'],
     description: 'Mark error as resolved with resolution notes',
     request: {
+      headers: AuthHeadersSchema,
       params: z.object({
         id: z.string().openapi({
           param: {
@@ -461,6 +450,7 @@ router.openapi(
     tags: ['Errors'],
     description: 'Acknowledge an error',
     request: {
+      headers: AuthHeadersSchema,
       params: z.object({
         id: z.string().openapi({
           param: {
@@ -530,6 +520,7 @@ router.openapi(
     tags: ['Errors'],
     description: 'Create a test error entry (development/test only)',
     request: {
+      headers: AuthHeadersSchema,
       body: {
         content: {
           'application/json': {

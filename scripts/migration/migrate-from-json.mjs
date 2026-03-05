@@ -22,14 +22,22 @@ import { createInterface } from 'readline';
 // Load .env configuration (before argv)
 // =============================================================================
 
-let MIGRATION_TOKEN = process.env.MIGRATION_API_TOKEN;
+let API_AUTH_TOKEN = process.env.API_AUTH_TOKEN || process.env.MIGRATION_API_TOKEN || process.env.ERRORS_API_TOKEN;
 let SERVER_PORT = '3000';
 
 const envPath = join(process.cwd(), '.env');
 if (existsSync(envPath)) {
   const envContent = readFileSync(envPath, 'utf8');
-  const tokenMatch = envContent.match(/MIGRATION_API_TOKEN=(.+)/);
-  if (tokenMatch) MIGRATION_TOKEN = tokenMatch[1].trim();
+  const unifiedTokenMatch = envContent.match(/API_AUTH_TOKEN=(.+)/);
+  const migrationTokenMatch = envContent.match(/MIGRATION_API_TOKEN=(.+)/);
+  const errorsTokenMatch = envContent.match(/ERRORS_API_TOKEN=(.+)/);
+  API_AUTH_TOKEN = (
+    unifiedTokenMatch?.[1]
+    || migrationTokenMatch?.[1]
+    || errorsTokenMatch?.[1]
+    || API_AUTH_TOKEN
+    || ''
+  ).trim();
   const portMatch = envContent.match(/SERVER_PORT=(\d+)/);
   if (portMatch) SERVER_PORT = portMatch[1];
 }
@@ -314,7 +322,7 @@ async function uploadResource({ resourceId, name, mime, buffer, entryAlias, time
 
   return fetch(`${NEW_SYSTEM_URL}/migration/resources/${resourceId}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-migration-token': MIGRATION_TOKEN },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_AUTH_TOKEN}` },
     body: JSON.stringify(payload),
   });
 }
@@ -328,7 +336,7 @@ function handleUploadResponse(status, responseText, resourceId, label, entryAlia
     case 200: log(`  ⏭️  已存在 (幂等): ${label}`);  stats.existing++; return true;
     case 201: log(`  ✅ 创建成功: ${label}`);         stats.success++;  return true;
     case 400: error(`  参数错误: ${label}`);           stats.failed++; stats.failedIds.push(`${resourceId}(bad_request)`);     return true;
-    case 401: error('  认证失败，请检查 MIGRATION_API_TOKEN'); stats.failed++; stats.failedIds.push(`${resourceId}(unauthorized)`); fatalError = true; return false;
+    case 401: error('  认证失败，请检查 API_AUTH_TOKEN'); stats.failed++; stats.failedIds.push(`${resourceId}(unauthorized)`); fatalError = true; return false;
     case 403: error('  迁移接口未启用 (MIGRATION_API_ENABLED=false)'); stats.failed++; stats.failedIds.push(`${resourceId}(forbidden)`); fatalError = true; return false;
     case 404: error(`  Entry '${entryAlias}' 不存在`); stats.failed++; stats.failedIds.push(`${resourceId}(entry_not_found)`); return true;
     case 409: warning(`  冲突 (ID 存在但内容不同): ${label}`); stats.failed++; stats.failedIds.push(`${resourceId}(conflict)`); return true;
@@ -464,7 +472,7 @@ async function main() {
   log(`最大重试: ${MAX_RETRIES}`);
 
   const required = [
-    [MIGRATION_TOKEN, '未找到 MIGRATION_API_TOKEN，请检查 .env 文件'],
+    [API_AUTH_TOKEN, '未找到 API_AUTH_TOKEN，请检查 .env 文件'],
     [RESOURCES_FILE,  '请指定 resources JSON 文件: --resources=./resources.json'],
     [IMAGES_FILE,     '请指定 images JSON 文件: --images=./images.json'],
     [ENTRY_ALIAS,     '请指定目标 entry alias: --entry-alias=<alias>'],
@@ -523,4 +531,3 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-

@@ -202,6 +202,61 @@ jsonpath "$.uploadConfig.allowedMimeTypes" count == 1
 jsonpath "$.uploadConfig.allowedMimeTypes[0]" == "application/pdf"
 jsonpath "$.uploadConfig.readOnly" == true
 
+# Test 13: Update with retentionMs (contract test for entry retention config)
+PUT {{BASE_URL}}/entries/{{entry_id}}
+Content-Type: application/json
+{
+  "uploadConfig": {
+    "maxFileSize": 10485760,
+    "allowedMimeTypes": ["application/pdf"],
+    "readOnly": false,
+    "retentionMs": 60000
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.uploadConfig.retentionMs" == 60000
+
+# Test 14: retentionMs=0 should fail
+PUT {{BASE_URL}}/entries/{{entry_id}}
+Content-Type: application/json
+{
+  "uploadConfig": {
+    "retentionMs": 0
+  }
+}
+
+HTTP 400
+[Asserts]
+jsonpath "$.error" exists
+
+# Test 15: retentionMs negative should fail
+PUT {{BASE_URL}}/entries/{{entry_id}}
+Content-Type: application/json
+{
+  "uploadConfig": {
+    "retentionMs": -1
+  }
+}
+
+HTTP 400
+[Asserts]
+jsonpath "$.error" exists
+
+# Test 16: retentionMs string type should fail
+PUT {{BASE_URL}}/entries/{{entry_id}}
+Content-Type: application/json
+{
+  "uploadConfig": {
+    "retentionMs": "abc"
+  }
+}
+
+HTTP 400
+[Asserts]
+jsonpath "$.error" exists
+
 # Cleanup: Delete test entry
 DELETE {{BASE_URL}}/entries/{{entry_id}}
 

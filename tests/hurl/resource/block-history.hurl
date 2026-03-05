@@ -116,7 +116,7 @@ jsonpath "$.code" == "NEW_BLOCK_NOT_FOUND"
 
 # The failed switch should be discoverable via /errors filter
 GET {{BASE_URL}}/errors?days=1&status=open&path=/resources/{{resource_id}}/block
-x-errors-token: {{ERRORS_TOKEN}}
+Authorization: Bearer {{API_TOKEN}}
 
 HTTP 200
 [Asserts]
