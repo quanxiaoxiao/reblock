@@ -184,3 +184,22 @@ npm run errors:resolve -- --id <error_id> --resolution "fixed by ..."
 Generated files are stored under `tests/hurl/errors/generated/`.
 
 If `/errors` token protection is enabled, set `API_AUTH_TOKEN` in `.env`.
+
+## Backup & Migration (Docker split deployment)
+
+For change-machine migration and disaster recovery:
+
+```bash
+# Export encrypted backup package
+npm run backup:export -- --passphrase '<backup-passphrase>'
+
+# Verify encrypted package integrity + required secrets
+npm run backup:verify -- --file backup/<package>.tar.gz.enc --passphrase '<backup-passphrase>'
+
+# Restore to new machine (app must be stopped)
+npm run backup:restore -- --file backup/<package>.tar.gz.enc --passphrase '<backup-passphrase>' --yes
+```
+
+These scripts read:
+- `.env.reblock.prod` for app + Mongo app credentials
+- `.env.mongo.reblock` for Mongo root/app bootstrap credentials

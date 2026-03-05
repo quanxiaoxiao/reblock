@@ -238,7 +238,7 @@ npm run errors:repro -- --run
 hurl tests/hurl/errors/generated/repro-<error_id>.hurl --variable BASE_URL=http://localhost:4362
 
 # 5) If you have request id, narrow scope quickly
-curl -H "x-errors-token: <errors_api_token>" \
+curl -H "Authorization: Bearer <api_auth_token>" \
   "http://localhost:4362/errors?days=1&status=open&requestId=<request_id>"
 
 # 6) Mark resolved after verification
@@ -281,9 +281,9 @@ LOG_ARCHIVE_TZ=Asia/Shanghai
 LOG_DEDUP_WINDOW_MINUTES=10
 ERROR_FALLBACK_LOG_FILE=./storage/_logs/runtime-fallback.log
 
-# Error API protection (optional)
-# If set, all /errors endpoints require x-errors-token
-ERRORS_API_TOKEN=your-errors-token
+# API protection (optional)
+# If set, protected endpoints require Authorization: Bearer <token>
+API_AUTH_TOKEN=your-api-token
 ```
 
 ## Dependency Guidelines
@@ -382,30 +382,47 @@ Log categories:
 
 ## Docker
 
-### Docker Compose (Recommended)
+### Quick Local Compose (Single file)
 
-The easiest way to get started:
+For local experiments, you can still use the original single-file setup:
 
 ```bash
-# Prepare runtime env file (reuse your existing ENCRYPTION_KEY)
-cp .env .env.docker
-echo "APP_PORT_BIND=3900" >> .env.docker
-echo "API_AUTH_TOKEN=$(openssl rand -hex 32)" >> .env.docker
-echo "TZ=Asia/Shanghai" >> .env.docker   # optional
-
-# Start all services
 docker compose --env-file .env.docker up -d
+```
 
-# View logs
-docker compose logs -f
+### Production-Style Self-Hosted Setup (Recommended)
 
-# Stop services
-docker compose down
+Use split compose files for strict data isolation:
+- Mongo: `docker-compose.mongo.yml` (no host port published)
+- App: `docker-compose.app.yml`
+
+```bash
+# 1) Create shared docker network once
+docker network create reblock-shared-net || true
+
+# 2) Prepare env files
+cp .env.mongo.reblock.example .env.mongo.reblock
+cp .env.reblock.prod.example .env.reblock.prod
+
+# Fill secrets before start:
+# - .env.mongo.reblock: MONGO_ROOT_PASSWORD, MONGO_APP_PASSWORD
+# - .env.reblock.prod: API_AUTH_TOKEN, ENCRYPTION_KEY, MONGO_PASSWORD
+
+# 3) Start Mongo first
+docker compose -f docker-compose.mongo.yml --env-file .env.mongo.reblock up -d
+
+# 4) Start app
+docker compose -f docker-compose.app.yml --env-file .env.reblock.prod up -d
 ```
 
 Service endpoint:
 - `http://<host>:3900`
-- Use `Authorization: Bearer <API_AUTH_TOKEN>` for protected APIs.
+- Protected APIs use `Authorization: Bearer <API_AUTH_TOKEN>`.
+
+Important:
+- Mongo does not expose `27017` to host/external.
+- Do not run `down -v` against Mongo compose in production.
+- Keep `ENCRYPTION_KEY` unchanged across machine migration.
 
 ### Docker Build
 
@@ -440,9 +457,43 @@ Timezone configuration:
 - Override with `.env` (`TZ=UTC`) when using Docker Compose.
 - Override with `--build-arg TZ=...` (build time) and `-e TZ=...` (runtime) when using `docker build/run`.
 
-Upgrade note for existing deployments:
-- Rotate `API_AUTH_TOKEN` when needed.
-- Keep the current `ENCRYPTION_KEY` unchanged to avoid encrypted data becoming unreadable.
+### Change-machine migration (short downtime)
+
+1. Stop app writes (Mongo keeps running):
+
+```bash
+docker compose -f docker-compose.app.yml --env-file .env.reblock.prod stop app
+```
+
+2. Export encrypted backup:
+
+```bash
+npm run backup:export -- --passphrase '<your-passphrase>'
+```
+
+3. Copy `.enc` package to new machine (offline media preferred).
+4. Copy secrets separately (never in backup package):
+- `ENCRYPTION_KEY`
+- `API_AUTH_TOKEN`
+- Mongo credentials
+5. On new machine, start Mongo + app with new env files.
+6. Restore backup:
+
+```bash
+npm run backup:restore -- --file backup/<package>.tar.gz.enc --passphrase '<your-passphrase>' --yes
+```
+
+7. Verify business paths: upload, download, resource query.
+
+### Update strategy after migration
+
+- App-only update:
+
+```bash
+docker compose -f docker-compose.app.yml --env-file .env.reblock.prod up -d --build app
+```
+
+- Mongo upgrade: run full backup first (`npm run backup:export`), then upgrade in a dedicated window.
 
 ## Testing
 
@@ -489,6 +540,7 @@ All scripts follow standardized patterns defined in `.opencode/rules/scripts-gen
 - Support PORT/SERVER_PORT configuration
 - MongoDB connection from environment
 - Storage paths from environment variables
+- Backup/migration scripts additionally support split env files (`.env.reblock.prod`, `.env.mongo.reblock`)
 
 ## License
 

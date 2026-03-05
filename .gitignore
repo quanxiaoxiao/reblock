@@ -3,6 +3,8 @@ dist/
 .env
 .env.local
 .env.docker
+.env.mongo.reblock
+.env.reblock.prod
 *.log
 .DS_Store
 .vscode/
@@ -20,3 +22,4 @@ reblock-deploy-*.tar.gz
 
 diff-report-*
 analysis_output/
+backup/

@@ -40,6 +40,9 @@
     "rollback": "node scripts/maintenance/rollback.mjs",
     "status": "node scripts/maintenance/status.mjs",
     "status:watch": "node scripts/maintenance/status.mjs --watch",
+    "backup:export": "node scripts/maintenance/backup-export.mjs",
+    "backup:verify": "node scripts/maintenance/backup-verify.mjs",
+    "backup:restore": "node scripts/maintenance/backup-restore.mjs",
     "typecheck": "tsc --noEmit",
     "openapi:export": "node scripts/export-openapi.mjs",
     "openapi:check": "node scripts/export-openapi.mjs --check"

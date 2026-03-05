@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: reblock-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_APP_DB: ${MONGO_APP_DB}
+      MONGO_APP_USER: ${MONGO_APP_USER}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD}
+    volumes:
+      - reblock_mongo_data_prod:/data/db
+      - reblock_mongo_config_prod:/data/configdb
+      - ./docker/mongo-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --host 127.0.0.1 --port 27017 -u \"$${MONGO_INITDB_ROOT_USERNAME}\" -p \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --eval \"db.adminCommand({ ping: 1 }).ok\" | grep 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - reblock-shared-net
+
+volumes:
+  reblock_mongo_data_prod:
+    name: reblock_mongo_data_prod
+  reblock_mongo_config_prod:
+    name: reblock_mongo_config_prod
+
+networks:
+  reblock-shared-net:
+    external: true
