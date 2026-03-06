@@ -150,7 +150,7 @@ const resourceSchema = new Schema<IResource>({
 });
 
 const resourceCategorySchema = new Schema<IResourceCategory>({
-  key: { type: String, required: true, trim: true, index: true },
+  key: { type: String, required: true, trim: true },
   name: { type: String, required: true, trim: true },
   iconDataUri: { type: String },
   color: { type: String },
