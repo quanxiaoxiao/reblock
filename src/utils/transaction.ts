@@ -23,8 +23,8 @@ export async function canUseTransactions(): Promise<boolean> {
       return false;
     }
     const hello = await admin.command({ hello: 1 });
-    const isReplicaSet = Boolean(hello?.setName);
-    const isMongos = hello?.msg === 'isdbgrid';
+    const isReplicaSet = Boolean(hello?.['setName']);
+    const isMongos = hello?.['msg'] === 'isdbgrid';
     transactionsSupported = isReplicaSet || isMongos;
     return transactionsSupported;
   } catch {

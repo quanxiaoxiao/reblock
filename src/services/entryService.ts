@@ -31,7 +31,7 @@ export interface IEntryService {
 
 export class EntryService implements IEntryService {
   async create(entryData: Partial<IEntry>): Promise<IEntry> {
-    const normalizedParentEntryId = await this.normalizeParentEntryId((entryData as Record<string, unknown>).parentEntryId);
+    const normalizedParentEntryId = await this.normalizeParentEntryId((entryData as Record<string, unknown>)['parentEntryId']);
     if (normalizedParentEntryId) {
       await this.assertParentExists(normalizedParentEntryId);
     }
@@ -58,7 +58,7 @@ export class EntryService implements IEntryService {
     // Service layer injects timestamps (per timestamp-soft-delete rule)
     const dataWithTimestamps = {
       ...entryData,
-      parentEntryId: normalizedParentEntryId === undefined ? (entryData as Record<string, unknown>).parentEntryId : normalizedParentEntryId,
+      parentEntryId: normalizedParentEntryId === undefined ? (entryData as Record<string, unknown>)['parentEntryId'] : normalizedParentEntryId,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -96,17 +96,17 @@ export class EntryService implements IEntryService {
 
     // Remove server-controlled fields from input
     const safeData = { ...entryData };
-    delete (safeData as Record<string, unknown>).createdAt;
-    delete (safeData as Record<string, unknown>).updatedAt;
-    delete (safeData as Record<string, unknown>).invalidatedAt;
+    delete (safeData as Record<string, unknown>)['createdAt'];
+    delete (safeData as Record<string, unknown>)['updatedAt'];
+    delete (safeData as Record<string, unknown>)['invalidatedAt'];
 
-    const normalizedParentEntryId = await this.normalizeParentEntryId((safeData as Record<string, unknown>).parentEntryId);
+    const normalizedParentEntryId = await this.normalizeParentEntryId((safeData as Record<string, unknown>)['parentEntryId']);
     if (normalizedParentEntryId !== undefined) {
       if (normalizedParentEntryId === null) {
-        (safeData as Record<string, unknown>).parentEntryId = null;
+        (safeData as Record<string, unknown>)['parentEntryId'] = null;
       } else {
         await this.assertNoCycle(id, normalizedParentEntryId);
-        (safeData as Record<string, unknown>).parentEntryId = normalizedParentEntryId;
+        (safeData as Record<string, unknown>)['parentEntryId'] = normalizedParentEntryId;
       }
     }
 
@@ -458,7 +458,7 @@ export class EntryService implements IEntryService {
       const plain = typeof (item as unknown as { toObject?: () => Record<string, unknown> }).toObject === 'function'
         ? (item as unknown as { toObject: () => Record<string, unknown> }).toObject()
         : { ...(item as unknown as Record<string, unknown>) };
-      plain.childrenCount = countMap.get(item._id.toString()) || 0;
+      plain['childrenCount'] = countMap.get(item._id.toString()) || 0;
       return plain as unknown as IEntry;
     });
   }

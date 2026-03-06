@@ -20,7 +20,7 @@ function clampWindowMinutes(windowMinutes: number): number {
 
 export class MetricsSnapshotService {
   private readonly buckets = new Map<number, TransferMinuteBucket>();
-  private timer?: NodeJS.Timeout;
+  private timer: NodeJS.Timeout | undefined;
 
   recordUploadSuccess(bytes: number): void {
     const bucket = this.getCurrentBucket();

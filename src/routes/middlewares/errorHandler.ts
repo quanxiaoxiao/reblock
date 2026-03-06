@@ -112,9 +112,10 @@ async function handleError(err: unknown, c: Context): Promise<Response> {
  * Catches errors from subsequent middleware and route handlers.
  * Use with: app.use('*', errorHandler)
  */
-export async function errorHandler(c: Context, next: Next) {
+export async function errorHandler(c: Context, next: Next): Promise<Response | void> {
   try {
     await next();
+    return undefined;
   } catch (err: unknown) {
     return handleError(err, c);
   }

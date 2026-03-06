@@ -4,8 +4,8 @@
  */
 
 export interface PaginationParams {
-  limit?: number;
-  offset?: number;
+  limit?: number | undefined;
+  offset?: number | undefined;
 }
 
 export interface ValidatedPagination {
@@ -81,7 +81,7 @@ export function validatePaginationWithMaxLimit(
  * @returns Normalized pagination parameters with optional limit
  */
 export function validatePaginationOptionalLimit(params?: PaginationParams): {
-  limit?: number;
+  limit?: number | undefined;
   offset: number;
 } {
   const raw = params?.limit;

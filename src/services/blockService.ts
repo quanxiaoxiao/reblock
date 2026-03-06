@@ -37,9 +37,9 @@ export class BlockService implements IBlockService {
 
     // Remove server-controlled fields from input
     const safeData = { ...blockData };
-    delete (safeData as Record<string, unknown>).createdAt;
-    delete (safeData as Record<string, unknown>).updatedAt;
-    delete (safeData as Record<string, unknown>).invalidatedAt;
+    delete (safeData as Record<string, unknown>)['createdAt'];
+    delete (safeData as Record<string, unknown>)['updatedAt'];
+    delete (safeData as Record<string, unknown>)['invalidatedAt'];
 
     const updatedBlock = await Block.findByIdAndUpdate(
       id,

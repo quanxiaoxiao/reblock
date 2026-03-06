@@ -238,10 +238,14 @@ router.openapi(
     const limitParam = c.req.query('limit');
     const offsetParam = c.req.query('offset');
     try {
-      const result = await resourceService.getHistory(id, {
-        limit: limitParam ? parseInt(limitParam, 10) : undefined,
-        offset: offsetParam ? parseInt(offsetParam, 10) : undefined,
-      });
+      const queryParams: { limit?: number; offset?: number } = {};
+      if (limitParam) {
+        queryParams.limit = parseInt(limitParam, 10);
+      }
+      if (offsetParam) {
+        queryParams.offset = parseInt(offsetParam, 10);
+      }
+      const result = await resourceService.getHistory(id, queryParams);
       return c.json(result);
     } catch (error) {
       if (error instanceof ResourceMutationError) {
@@ -532,7 +536,7 @@ export function parseRange(header: string, total: number): { start: number; end:
   const match = header.match(/^bytes=(\d+)-(\d+)?$/);
   if (!match) return null;
 
-  const start = parseInt(match[1], 10);
+  const start = parseInt(match[1]!, 10);
   const end = match[2] ? parseInt(match[2], 10) : total - 1;
 
   // Validate range

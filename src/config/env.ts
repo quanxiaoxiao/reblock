@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const isTestRuntime = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+const isTestRuntime = process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true';
 const TEST_DEFAULT_KEY = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
 
 const runtimeEnv: Record<string, string | undefined> = {
@@ -12,11 +12,11 @@ const runtimeEnv: Record<string, string | undefined> = {
 
 // Provide safe defaults for test runtime so unit tests do not require a local .env file.
 if (isTestRuntime) {
-  runtimeEnv.PORT ??= '3000';
-  runtimeEnv.MONGO_HOSTNAME ??= 'localhost';
-  runtimeEnv.MONGO_DATABASE ??= 'reblock_test';
-  runtimeEnv.ENCRYPTION_KEY ??= TEST_DEFAULT_KEY;
-  runtimeEnv.RETENTION_SCHEDULER_ENABLED ??= 'false';
+  runtimeEnv['PORT'] ??= '3000';
+  runtimeEnv['MONGO_HOSTNAME'] ??= 'localhost';
+  runtimeEnv['MONGO_DATABASE'] ??= 'reblock_test';
+  runtimeEnv['ENCRYPTION_KEY'] ??= TEST_DEFAULT_KEY;
+  runtimeEnv['RETENTION_SCHEDULER_ENABLED'] ??= 'false';
 }
 
 /** Helper: parse string to positive integer with pipe validation */

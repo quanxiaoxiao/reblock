@@ -28,8 +28,8 @@ export function assertValidIconDataUri(iconDataUri?: string): void {
     throw new Error('iconDataUri must be a base64 data URI for image/svg+xml or image/png');
   }
 
-  const base64Payload = match[2];
-  let bytes = 0;
+  const base64Payload = match[2]!;
+  let bytes: number;
   try {
     bytes = Buffer.from(base64Payload, 'base64').byteLength;
   } catch {

@@ -20,12 +20,12 @@ export interface MigrationResourceData {
   legacyId: string;
   entryAlias: string;
   name: string;
-  mime?: string;
-  categoryKey?: string;
-  description?: string;
+  mime?: string | undefined;
+  categoryKey?: string | undefined;
+  description?: string | undefined;
   contentBase64: string;
-  createdAt?: number;
-  updatedAt?: number;
+  createdAt?: number | undefined;
+  updatedAt?: number | undefined;
 }
 
 export interface MigrationResult {
@@ -356,11 +356,11 @@ export class MigrationService {
     entry: IEntry;
     block: IBlock;
     name: string;
-    mime?: string;
-    categoryKey?: string;
-    description?: string;
-    createdAt?: number;
-    updatedAt?: number;
+    mime?: string | undefined;
+    categoryKey?: string | undefined;
+    description?: string | undefined;
+    createdAt?: number | undefined;
+    updatedAt?: number | undefined;
   }): Promise<IResource> {
     const { legacyId, entry, block, name, mime, categoryKey, description, createdAt, updatedAt } = params;
     const now = Date.now();

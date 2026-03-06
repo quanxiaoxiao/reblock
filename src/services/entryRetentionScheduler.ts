@@ -10,7 +10,7 @@ function clampPositiveInt(value: number, fallback: number, min: number): number 
 }
 
 export class EntryRetentionScheduler {
-  private timer?: NodeJS.Timeout;
+  private timer: NodeJS.Timeout | undefined;
   private running = false;
   private readonly lockKey = 'entry_retention_scheduler';
   private readonly lockOwner = `${process.pid}-${randomUUID()}`;

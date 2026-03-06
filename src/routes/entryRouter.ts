@@ -174,14 +174,14 @@ router.openapi(
     const filter: Record<string, unknown> = {};
     if (parentEntryIdRaw !== undefined) {
       if (parentEntryIdRaw === '' || parentEntryIdRaw === 'root') {
-        filter.$or = [
+        filter['$or'] = [
           { parentEntryId: null },
           { parentEntryId: { $exists: false } },
         ];
       } else if (!z.string().regex(/^[a-f\d]{24}$/i).safeParse(parentEntryIdRaw).success) {
         return c.json({ error: 'parentEntryId is invalid' }, 400);
       } else {
-        filter.parentEntryId = parentEntryIdRaw;
+        filter['parentEntryId'] = parentEntryIdRaw;
       }
     }
 

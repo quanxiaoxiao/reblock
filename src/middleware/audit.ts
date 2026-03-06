@@ -31,19 +31,20 @@ export const audit = (options: AuditOptions) => {
       throw err;
     } finally {
       const success = statusCode !== undefined && statusCode < 400;
+      const status: 'success' | 'failure' = success ? 'success' : 'failure';
       
       if (env.NODE_ENV === 'production' || env.NODE_ENV === 'development') {
         const resourceId = options.getResourceId 
           ? options.getResourceId(c)
           : c.get('resourceId');
-        
-        await auditService.log({
+
+        const entry = {
           timestamp: Date.now(),
           requestId,
           action: options.action,
           resourceType: options.resourceType,
           resourceId,
-          status: success ? 'success' : 'failure',
+          status,
           ip: clientIp,
           userAgent,
           method,
@@ -51,7 +52,9 @@ export const audit = (options: AuditOptions) => {
           statusCode,
           error,
           userId: c.get('userId'),
-        });
+        };
+
+        await auditService.log(entry);
       }
     }
   };

@@ -56,30 +56,30 @@ export enum DataLossRisk {
 export interface ILogContext {
   detectedBy: 'doctor' | 'cleanup' | 'resourceService' | 'uploadService' | 'migrationService' | 'system';
   detectedAt: number;
-  scriptVersion?: string;
-  serverVersion?: string;
+  scriptVersion?: string | undefined;
+  serverVersion?: string | undefined;
   environment: 'development' | 'production' | 'test';
-  originalCreatedAt?: number;
-  daysSinceCreation?: number;
-  lastAccessedAt?: number;
-  stackTrace?: string;
-  requestId?: string;
-  userAgent?: string;
+  originalCreatedAt?: number | undefined;
+  daysSinceCreation?: number | undefined;
+  lastAccessedAt?: number | undefined;
+  stackTrace?: string | undefined;
+  requestId?: string | undefined;
+  userAgent?: string | undefined;
 }
 
 // Status history entry
 export interface IStatusHistoryEntry {
   status: string;
   changedAt: number;
-  changedBy?: string;
-  note?: string;
+  changedBy?: string | undefined;
+  note?: string | undefined;
 }
 
 // File storage location info
 export interface IFileLocation {
   date: string;
   filePath: string;
-  lineNumber?: number;
+  lineNumber?: number | undefined;
 }
 
 // Block snapshot at detection time
@@ -95,8 +95,8 @@ export interface IBlockSnapshot {
 export interface IActualState {
   refCount: number;
   fileExists: boolean;
-  fileSize?: number;
-  duplicateBlocks?: Types.ObjectId[];
+  fileSize?: number | undefined;
+  duplicateBlocks?: Types.ObjectId[] | undefined;
 }
 
 // Main LogEntry interface
@@ -107,23 +107,23 @@ export interface ILogEntry extends Document {
   category: LogCategory;
   
   // Related data
-  blockId?: Types.ObjectId;
-  blockSha256?: string;
-  resourceIds?: Types.ObjectId[];
-  entryIds?: Types.ObjectId[];
+  blockId?: Types.ObjectId | undefined;
+  blockSha256?: string | undefined;
+  resourceIds?: Types.ObjectId[] | undefined;
+  entryIds?: Types.ObjectId[] | undefined;
   
   // Block snapshot
-  blockSnapshot?: IBlockSnapshot;
+  blockSnapshot?: IBlockSnapshot | undefined;
   
   // Dynamic details based on category
   details: Record<string, any>;
-  fingerprint?: string;
-  occurrenceCount?: number;
-  firstSeenAt?: number;
-  lastSeenAt?: number;
+  fingerprint?: string | undefined;
+  occurrenceCount?: number | undefined;
+  firstSeenAt?: number | undefined;
+  lastSeenAt?: number | undefined;
   
   // Actual state at detection
-  actualState?: IActualState;
+  actualState?: IActualState | undefined;
   
   // Context
   context: ILogContext;
@@ -132,21 +132,21 @@ export interface ILogEntry extends Document {
   suggestedAction: string;
   recoverable: boolean;
   dataLossRisk: DataLossRisk;
-  recoverySteps?: string[];
+  recoverySteps?: string[] | undefined;
   
   // Status tracking
   status: IssueStatus;
-  statusHistory?: IStatusHistoryEntry[];
-  resolvedAt?: number;
-  resolution?: string;
-  resolvedBy?: string;
+  statusHistory?: IStatusHistoryEntry[] | undefined;
+  resolvedAt?: number | undefined;
+  resolution?: string | undefined;
+  resolvedBy?: string | undefined;
   
   // File storage location
-  fileLocation?: IFileLocation;
+  fileLocation?: IFileLocation | undefined;
   
   // Metadata
   createdAt: number;
-  expiresAt?: Date;
+  expiresAt?: Date | undefined;
 }
 
 // Schema definition

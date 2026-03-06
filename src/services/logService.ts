@@ -3,7 +3,7 @@ import { appendFile, mkdir, readdir, rename } from 'fs/promises';
 import { join } from 'path';
 import { env } from '../config/env';
 import { validatePaginationOptionalLimit } from '../utils/pagination';
-import { 
+import {
   LogEntry, 
   ILogEntry, 
   LogLevel, 
@@ -11,6 +11,7 @@ import {
   IssueStatus, 
   DataLossRisk,
   ILogContext,
+  IStatusHistoryEntry,
 } from '../models/logEntry';
 
 /**
@@ -62,8 +63,8 @@ const MAX_STATUS_HISTORY = 100;
  * Push to status history with size limit
  */
 function pushToStatusHistory(
-  history: { status: string; changedAt: number; changedBy?: string; note?: string }[],
-  entry: { status: string; changedAt: number; changedBy?: string; note?: string }
+  history: IStatusHistoryEntry[],
+  entry: IStatusHistoryEntry
 ): void {
   history.push(entry);
   // Keep only the last MAX_STATUS_HISTORY entries
@@ -76,15 +77,15 @@ function pushToStatusHistory(
 export interface LogIssueParams {
   level: LogLevel;
   category: LogCategory;
-  blockId?: string | Types.ObjectId;
-  resourceIds?: (string | Types.ObjectId)[];
-  entryIds?: (string | Types.ObjectId)[];
+  blockId?: string | Types.ObjectId | undefined;
+  resourceIds?: (string | Types.ObjectId)[] | undefined;
+  entryIds?: (string | Types.ObjectId)[] | undefined;
   details: Record<string, any>;
   suggestedAction: string;
   recoverable: boolean;
-  dataLossRisk?: DataLossRisk;
-  recoverySteps?: string[];
-  context?: Partial<ILogContext>;
+  dataLossRisk?: DataLossRisk | undefined;
+  recoverySteps?: string[] | undefined;
+  context?: Partial<ILogContext> | undefined;
 }
 
 // Interface for cleanup action parameters
@@ -94,19 +95,19 @@ export interface LogCleanupActionParams {
   previousState: Record<string, any>;
   newState: Record<string, any>;
   success: boolean;
-  error?: string;
+  error?: string | undefined;
 }
 
 export interface LogActionParams {
   action: string;
-  success?: boolean;
-  blockId?: string | Types.ObjectId;
-  resourceIds?: (string | Types.ObjectId)[];
-  entryIds?: (string | Types.ObjectId)[];
-  details?: Record<string, any>;
-  note?: string;
-  actor?: string;
-  requestId?: string;
+  success?: boolean | undefined;
+  blockId?: string | Types.ObjectId | undefined;
+  resourceIds?: (string | Types.ObjectId)[] | undefined;
+  entryIds?: (string | Types.ObjectId)[] | undefined;
+  details?: Record<string, any> | undefined;
+  note?: string | undefined;
+  actor?: string | undefined;
+  requestId?: string | undefined;
 }
 
 export interface MetricsSnapshot {
@@ -123,22 +124,22 @@ export interface MetricsSnapshot {
 
 // Interface for log filter
 export interface LogFilter {
-  category?: LogCategory;
-  level?: LogLevel;
-  status?: IssueStatus | { $ne: IssueStatus };
-  blockId?: string;
-  detectedBy?: string;
-  fingerprint?: string;
-  errorId?: string;
-  requestId?: string;
-  path?: string;
-  method?: string;
-  errorName?: string;
-  startDate?: Date;
-  endDate?: Date;
-  limit?: number;
-  offset?: number;
-  sortOrder?: 'asc' | 'desc';
+  category?: LogCategory | undefined;
+  level?: LogLevel | undefined;
+  status?: IssueStatus | { $ne: IssueStatus } | undefined;
+  blockId?: string | undefined;
+  detectedBy?: string | undefined;
+  fingerprint?: string | undefined;
+  errorId?: string | undefined;
+  requestId?: string | undefined;
+  path?: string | undefined;
+  method?: string | undefined;
+  errorName?: string | undefined;
+  startDate?: Date | undefined;
+  endDate?: Date | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+  sortOrder?: 'asc' | 'desc' | undefined;
 }
 
 // Interface for summary report
@@ -154,7 +155,7 @@ export interface LogSummary {
     warning: number;
   };
   recentIssues: ILogEntry[];
-  oldestOpenIssue?: ILogEntry;
+  oldestOpenIssue?: ILogEntry | undefined;
 }
 
 export class LogService {
@@ -183,7 +184,7 @@ export class LogService {
    */
   async logIssue(params: LogIssueParams): Promise<ILogEntry> {
     const now = Date.now();
-    const fingerprint = typeof params.details?.fingerprint === 'string' ? params.details.fingerprint : undefined;
+    const fingerprint = typeof params.details?.['fingerprint'] === 'string' ? params.details['fingerprint'] : undefined;
     const dedupWindowMinutes = Number.isFinite(env.LOG_DEDUP_WINDOW_MINUTES) ? env.LOG_DEDUP_WINDOW_MINUTES : 10;
     const dedupWindowMs = Math.max(1, dedupWindowMinutes) * 60 * 1000;
 
@@ -260,7 +261,7 @@ export class LogService {
     });
 
     // Pre-compute file location so we only need a single save
-    const date = new Date().toISOString().split('T')[0];
+    const date = new Date().toISOString().split('T')[0]!;
     const dir = getIssuesDir();
     const filePath = join(dir, `${date}.jsonl`);
     entry.fileLocation = { date, filePath };
@@ -430,7 +431,7 @@ export class LogService {
   async findOpenIssues(category?: LogCategory, limit: number = 200): Promise<ILogEntry[]> {
     const filter: Record<string, unknown> = { status: IssueStatus.OPEN };
     if (category) {
-      filter.category = category;
+      filter['category'] = category;
     }
     const safeLimit = Math.max(1, Math.min(1000, Math.floor(limit)));
     
@@ -475,15 +476,15 @@ export class LogService {
       },
     };
 
-    if (filter?.category) query.category = filter.category;
-    if (filter?.level) query.level = filter.level;
-    if (filter?.status) query.status = filter.status;
-    if (filter?.blockId) query.blockId = new Types.ObjectId(filter.blockId);
+    if (filter?.category) query['category'] = filter.category;
+    if (filter?.level) query['level'] = filter.level;
+    if (filter?.status) query['status'] = filter.status;
+    if (filter?.blockId) query['blockId'] = new Types.ObjectId(filter.blockId);
     if (filter?.detectedBy) query['context.detectedBy'] = filter.detectedBy;
-    if (filter?.fingerprint) query.fingerprint = filter.fingerprint;
+    if (filter?.fingerprint) query['fingerprint'] = filter.fingerprint;
     if (filter?.errorId) query['details.errorId'] = filter.errorId;
     if (filter?.requestId) {
-      query.$or = [
+      query['$or'] = [
         { 'context.requestId': filter.requestId },
         { 'details.requestId': filter.requestId },
       ];
@@ -607,7 +608,7 @@ export class LogService {
    */
   private async writeToFile(entry: ILogEntry, subdir: 'issues' | 'actions' | 'metrics'): Promise<void> {
     try {
-      const date = new Date().toISOString().split('T')[0];
+      const date = new Date().toISOString().split('T')[0]!;
       const dir = subdir === 'issues' ? getIssuesDir() : subdir === 'actions' ? getActionsDir() : getMetricsDir();
       const filePath = join(dir, `${date}.jsonl`);
 
@@ -677,7 +678,7 @@ export class LogService {
    * Get current environment
    */
   private getEnvironment(): 'development' | 'production' | 'test' {
-    const nodeEnv = process.env.NODE_ENV;
+    const nodeEnv = process.env['NODE_ENV'];
     if (nodeEnv === 'production') return 'production';
     if (nodeEnv === 'test') return 'test';
     return 'development';
@@ -763,7 +764,7 @@ export class LogService {
             // Check if file is older than threshold
             if (fileDate < archiveThreshold) {
               const sourcePath = join(dir, file);
-              const monthDir = join(getArchiveDir(), dateMatch[1], dateMatch[2]);
+              const monthDir = join(getArchiveDir(), dateMatch[1]!, dateMatch[2]!);
               
               // Create month directory if not exists
               await mkdir(monthDir, { recursive: true });

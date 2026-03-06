@@ -6,15 +6,15 @@ export interface AuditEntry {
   requestId: string;
   action: AuditAction;
   resourceType: ResourceType;
-  resourceId?: string;
+  resourceId?: string | undefined;
   status: 'success' | 'failure';
   ip: string;
-  userAgent?: string;
+  userAgent?: string | undefined;
   method: string;
   path: string;
-  statusCode?: number;
-  error?: string;
-  userId?: string;
+  statusCode?: number | undefined;
+  error?: string | undefined;
+  userId?: string | undefined;
 }
 
 export type AuditAction = 
@@ -70,7 +70,8 @@ export class AuditService {
     
     const forwardedFor = c.req.header('x-forwarded-for');
     if (forwardedFor) {
-      return forwardedFor.split(',')[0].trim();
+      const firstForwardedIp = forwardedFor.split(',')[0];
+      return firstForwardedIp ? firstForwardedIp.trim() : 'unknown';
     }
     
     return c.req.raw?.socket?.remoteAddress || 'unknown';

@@ -31,16 +31,16 @@ export interface DownloadResult {
 
 export interface ResourceBlockUpdateParams {
   newBlockId: string;
-  changedBy?: string;
-  reason?: string;
-  requestId?: string;
-  expectedUpdatedAt?: number;
-  action?: 'swap' | 'rollback';
+  changedBy?: string | undefined;
+  reason?: string | undefined;
+  requestId?: string | undefined;
+  expectedUpdatedAt?: number | undefined;
+  action?: 'swap' | 'rollback' | undefined;
 }
 
 export interface ResourceHistoryQueryParams {
-  limit?: number;
-  offset?: number;
+  limit?: number | undefined;
+  offset?: number | undefined;
 }
 
 export class ResourceMutationError extends Error {
@@ -106,12 +106,12 @@ export class ResourceService implements IResourceService {
 
     // Remove server-controlled fields from input
     const safeData = { ...resourceData };
-    delete (safeData as Record<string, unknown>).createdAt;
-    delete (safeData as Record<string, unknown>).updatedAt;
-    delete (safeData as Record<string, unknown>).invalidatedAt;
+    delete (safeData as Record<string, unknown>)['createdAt'];
+    delete (safeData as Record<string, unknown>)['updatedAt'];
+    delete (safeData as Record<string, unknown>)['invalidatedAt'];
 
     // block changes are only allowed via PATCH /resources/:id/block
-    if ((safeData as Record<string, unknown>).block !== undefined) {
+    if ((safeData as Record<string, unknown>)['block'] !== undefined) {
       throw new ResourceMutationError(
         'block is immutable on this endpoint; use PATCH /resources/:id/block',
         400,
@@ -119,7 +119,7 @@ export class ResourceService implements IResourceService {
       );
     }
 
-    if ((safeData as Record<string, unknown>).entry !== undefined) {
+    if ((safeData as Record<string, unknown>)['entry'] !== undefined) {
       const entryId = (safeData as { entry?: unknown }).entry;
       if (typeof entryId !== 'string' || !mongoose.isValidObjectId(entryId)) {
         throw new ResourceMutationError('entry is invalid', 400, 'INVALID_ENTRY');
@@ -428,7 +428,7 @@ export class ResourceService implements IResourceService {
     if (entryAlias && typeof entryAlias === 'string') {
       const entry = await Entry.findOne({ alias: entryAlias, isInvalid: { $ne: true } });
       if (entry) {
-        mongoFilter.entry = entry._id;
+        mongoFilter['entry'] = entry._id;
       } else {
         // Entry not found - return empty result
         return { items: [], total: 0, limit, offset };
@@ -437,13 +437,13 @@ export class ResourceService implements IResourceService {
 
     if (typeof categoryKey === 'string') {
       if (categoryKey === RESERVED_CATEGORY_KEY) {
-        mongoFilter.$or = [
+        mongoFilter['$or'] = [
           { categoryKey: null },
           { categoryKey: { $exists: false } },
           { categoryKey: '' },
         ];
       } else {
-        mongoFilter.categoryKey = categoryKey;
+        mongoFilter['categoryKey'] = categoryKey;
       }
     }
     

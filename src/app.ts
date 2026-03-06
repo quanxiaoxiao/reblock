@@ -110,7 +110,7 @@ if (env.NODE_ENV !== 'production') {
       // 动态更新服务器URL为当前请求的URL
       const currentUrl = new URL(c.req.url);
       currentUrl.pathname = '';
-      spec.servers = [
+      spec['servers'] = [
         {
           url: currentUrl.toString(),
           description: 'Current Server',

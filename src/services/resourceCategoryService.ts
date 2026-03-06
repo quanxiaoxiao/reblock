@@ -9,14 +9,14 @@ import {
 
 export interface ResourceCategoryCreateParams {
   name: string;
-  iconDataUri?: string;
-  color?: string;
+  iconDataUri?: string | undefined;
+  color?: string | undefined;
 }
 
 export interface ResourceCategoryUpdateParams {
-  name?: string;
-  iconDataUri?: string;
-  color?: string;
+  name?: string | undefined;
+  iconDataUri?: string | undefined;
+  color?: string | undefined;
 }
 
 export class ResourceCategoryError extends Error {
@@ -86,7 +86,7 @@ export class ResourceCategoryService {
     } else if (params.iconDataUri === undefined) {
       // keep as-is
     } else {
-      category.iconDataUri = undefined;
+      category.set('iconDataUri', undefined);
     }
 
     if (typeof params.color === 'string') {
@@ -95,7 +95,7 @@ export class ResourceCategoryService {
     } else if (params.color === undefined) {
       // keep as-is
     } else {
-      category.color = undefined;
+      category.set('color', undefined);
     }
 
     category.updatedAt = Date.now();
