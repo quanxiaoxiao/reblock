@@ -1,0 +1,7 @@
+interface:
+  display_name: "TS Backend Standard"
+  short_description: "Strict TypeScript backend architecture baseline"
+  default_prompt: "Use $ts-backend-standard to audit this TypeScript backend, align it with strict Hono, Zod, TypeScript, and ESLint conventions, make minimal compliant changes, and verify with the repo's own scripts."
+
+policy:
+  allow_implicit_invocation: true
