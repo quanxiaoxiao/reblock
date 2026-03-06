@@ -1,4 +1,5 @@
-import mongoose, { Document, Schema, Types } from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
+import type { Document, Types } from 'mongoose';
 import { env } from '../config/env';
 
 /**
@@ -116,7 +117,7 @@ export interface ILogEntry extends Document {
   blockSnapshot?: IBlockSnapshot | undefined;
   
   // Dynamic details based on category
-  details: Record<string, any>;
+  details: Record<string, unknown>;
   fingerprint?: string | undefined;
   occurrenceCount?: number | undefined;
   firstSeenAt?: number | undefined;
@@ -162,7 +163,7 @@ const logEntrySchema = new Schema<ILogEntry>({
   timestamp: { 
     type: Number, 
     required: true, 
-    default: () => Date.now() 
+    default: (): number => Date.now(),
   },
   level: { 
     type: String, 
@@ -289,13 +290,13 @@ const logEntrySchema = new Schema<ILogEntry>({
   // TTL expiration - must be Date type for MongoDB TTL index to work
   expiresAt: { 
     type: Date,
-    default: () => new Date(Date.now() + env.LOG_TTL_DAYS * 24 * 60 * 60 * 1000),
+    default: (): Date => new Date(Date.now() + env.LOG_TTL_DAYS * 24 * 60 * 60 * 1000),
   },
   
   // Explicit timestamp field (number ms), not mongoose timestamps
   createdAt: {
     type: Number,
-    default: () => Date.now()
+    default: (): number => Date.now(),
   },
 });
 

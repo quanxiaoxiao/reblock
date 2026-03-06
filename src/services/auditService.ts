@@ -1,3 +1,4 @@
+import type { Context } from 'hono';
 import { appendFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 
@@ -34,7 +35,7 @@ export type ResourceType =
 const AUDIT_DIR = join(process.cwd(), 'storage', '_audit');
 const AUDIT_FILE = join(AUDIT_DIR, `audit-${getDateString()}.jsonl`);
 
-function getDateString() {
+function getDateString(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
@@ -64,7 +65,7 @@ export class AuditService {
     }
   }
 
-  getClientIp(c: { req: { header: (name: string) => string | null; raw?: { socket?: { remoteAddress?: string } } } }): string {
+  getClientIp(c: Pick<Context, 'req'>): string {
     const cfIp = c.req.header('cf-connecting-ip');
     if (cfIp) return cfIp;
     

@@ -13,7 +13,8 @@ import {
   generateStorageName,
   generateIV,
   createEncryptStream,
-  getStoragePath
+  getStoragePath,
+  getObjectIdBuffer,
 } from '../utils/crypto';
 
 export interface MigrationResourceData {
@@ -49,6 +50,10 @@ export class MigrationService {
   private readonly tempDir = env.STORAGE_TEMP_DIR;
   private readonly blocksDir = env.STORAGE_BLOCK_DIR;
 
+  private isDuplicateSha256Error(error: unknown): error is { code?: number; message?: string } {
+    return typeof error === 'object' && error !== null;
+  }
+
   async importResource(data: MigrationResourceData, signal?: AbortSignal): Promise<MigrationResult> {
     const { legacyId, entryAlias, name, mime, categoryKey, description, contentBase64, createdAt, updatedAt } = data;
     this.throwIfAborted(signal);
@@ -79,12 +84,15 @@ export class MigrationService {
       // Step 6: Check existing resource for idempotency/conflict
       const existingCheck = await this.checkExistingResource(legacyId, sha256, name, entry._id.toString());
       if (existingCheck.existingResource) {
+        if (!existingCheck.block) {
+          throw new MigrationError(`Existing resource ${legacyId} is missing its block`, 500, 'BLOCK_NOT_FOUND');
+        }
         // Idempotent - resource already exists with same content
         await fs.unlink(tempFilePath).catch(() => {});
         return {
           resource: existingCheck.existingResource,
           isNew: false,
-          block: existingCheck.block!
+          block: existingCheck.block,
         };
       }
       if (existingCheck.conflict) {
@@ -269,8 +277,7 @@ export class MigrationService {
         });
 
         // Write file for new block
-        const objectIdBuffer = (block._id as any).id || Buffer.from(block._id.toString(), 'hex');
-        const iv = generateIV(objectIdBuffer);
+        const iv = generateIV(getObjectIdBuffer(block._id));
 
         await this.ensureDirectoryExists(path.dirname(blockPath));
 
@@ -290,9 +297,9 @@ export class MigrationService {
 
         return block;
 
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Duplicate key error - block already exists
-        if (error.code === 11000 && error.message?.includes('sha256')) {
+        if (this.isDuplicateSha256Error(error) && error.code === 11000 && error.message?.includes('sha256')) {
           const updated = await Block.findOneAndUpdate(
             { sha256, isInvalid: { $ne: true } },
             { $inc: { linkCount: 1 }, $set: { updatedAt: now } },
@@ -382,13 +389,13 @@ export class MigrationService {
 
     try {
       return await resource.save();
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Rollback block linkCount if resource creation fails
       await Block.findByIdAndUpdate(block._id, {
         $inc: { linkCount: -1 }
       });
 
-      if (error.code === 11000) {
+      if (this.isDuplicateSha256Error(error) && error.code === 11000) {
         throw new MigrationError(
           `Resource with ID ${legacyId} already exists`,
           409,

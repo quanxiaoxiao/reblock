@@ -100,7 +100,7 @@ async function writeReportIfNeeded(reportFile, reportData) {
   await writeFile(reportFile, JSON.stringify(reportData, null, 2), 'utf8');
 }
 
-async function main(options) {
+async function main(_options) {
   const cwd = process.cwd();
   const manifestFile = resolve(cwd, 'analysis_output/mcp-smoke-manifest.json');
   const client = new McpClient('node', ['scripts/mcp/reblock-mcp-server.mjs'], { cwd });

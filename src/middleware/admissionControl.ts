@@ -97,7 +97,9 @@ export function getAdmissionRuntimeSnapshot(): AdmissionRuntimeSnapshot[] {
   return Array.from(runtimeStates.values()).map((state) => ({ ...state }));
 }
 
-export function createAdmissionControl(options: AdmissionControlOptions) {
+export function createAdmissionControl(
+  options: AdmissionControlOptions
+): (c: Context, next: Next) => Promise<Response | void> {
   const config: AdmissionConfig = {
     ...options,
     overloadStatusCode: options.overloadStatusCode ?? 429,
@@ -151,7 +153,7 @@ export function createAdmissionControl(options: AdmissionControlOptions) {
     );
   };
 
-  const tryDrainQueue = () => {
+  const tryDrainQueue = (): void => {
     while (state.inflight < config.maxInflight && queue.length > 0) {
       const next = queue.shift();
       if (!next || next.settled) continue;
@@ -172,7 +174,7 @@ export function createAdmissionControl(options: AdmissionControlOptions) {
     }
   };
 
-  const releaseSlot = () => {
+  const releaseSlot = (): void => {
     state.inflight = Math.max(0, state.inflight - 1);
     tryDrainQueue();
   };

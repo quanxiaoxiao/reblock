@@ -366,6 +366,7 @@ function printTextReport(report) {
   if (report.existing.length > 0) {
     logSection(`Existing Files Sample (${Math.min(report.existing.length, 5)} of ${report.existing.length})`);
     report.existing.slice(0, 5).forEach((item) => {
+      // eslint-disable-next-line no-control-regex
       logSuccess(`${item.resourceId}: ${formatBytes(item.size).replace(/\x1b\[[0-9;]*m/g, '')}`);
     });
   }
@@ -452,6 +453,7 @@ Examples:
             : c.green + '✔'
           : c.red + '✖';
         const status = result.exists ? (result.isEmpty ? 'EMPTY' : 'OK') : result.status === 404 ? '404' : 'ERR';
+        // eslint-disable-next-line no-control-regex
         const size = result.exists ? `(${formatBytes(result.size).replace(/\x1b\[[0-9;]*m/g, '')})` : '';
         console.log(`  ${symbol}${c.reset} ${result.resourceId} [${status}] ${size}`);
       }

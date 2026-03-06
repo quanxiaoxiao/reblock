@@ -73,7 +73,7 @@ function createRequestController(rawSignal: AbortSignal, timeoutMs: number): {
     controller.abort();
   }, timeoutMs);
 
-  const onAbort = () => {
+  const onAbort = (): void => {
     controller.abort();
   };
 
@@ -81,8 +81,8 @@ function createRequestController(rawSignal: AbortSignal, timeoutMs: number): {
 
   return {
     signal: controller.signal,
-    timedOut: () => isTimedOut,
-    cleanup: () => {
+    timedOut: (): boolean => isTimedOut,
+    cleanup: (): void => {
       clearTimeout(timeout);
       rawSignal.removeEventListener('abort', onAbort);
     },
@@ -160,7 +160,7 @@ router.openapi(
     }
     
     // Extract client info for tracking
-    const clientIp = auditService.getClientIp(c as any);
+    const clientIp = auditService.getClientIp(c);
     const userAgent = c.req.header('user-agent') || undefined;
     
     // Ensure temp directory exists

@@ -10,6 +10,11 @@ const ALGORITHM = 'aes-256-ctr';
  */
 let _cachedKey: Buffer | null = null;
 
+interface ObjectIdLike {
+  id?: Buffer | Uint8Array;
+  toString(): string;
+}
+
 /**
  * Get encryption key from environment variable (cached after first call).
  * Key must be base64 encoded 32 bytes.
@@ -58,7 +63,7 @@ export function createEncryptStream(iv: Buffer): Transform {
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   
   return new Transform({
-    transform(chunk: Buffer, _encoding, callback) {
+    transform(chunk: Buffer, _encoding, callback): void {
       try {
         const encrypted = cipher.update(chunk);
         callback(null, encrypted);
@@ -66,7 +71,7 @@ export function createEncryptStream(iv: Buffer): Transform {
         callback(error as Error);
       }
     },
-    flush(callback) {
+    flush(callback): void {
       try {
         const final = cipher.final();
         callback(null, final);
@@ -87,7 +92,7 @@ export function createDecryptStream(iv: Buffer): Transform {
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   
   return new Transform({
-    transform(chunk: Buffer, _encoding, callback) {
+    transform(chunk: Buffer, _encoding, callback): void {
       try {
         const decrypted = decipher.update(chunk);
         callback(null, decrypted);
@@ -95,7 +100,7 @@ export function createDecryptStream(iv: Buffer): Transform {
         callback(error as Error);
       }
     },
-    flush(callback) {
+    flush(callback): void {
       try {
         const final = decipher.final();
         callback(null, final);
@@ -136,7 +141,7 @@ export function createDecryptStreamWithOffset(iv: Buffer, offset: number): Trans
   const skipBytes = offset % blockSize;
 
   return new Transform({
-    transform(chunk: Buffer, _encoding, callback) {
+    transform(chunk: Buffer, _encoding, callback): void {
       try {
         let decrypted = decipher.update(chunk);
 
@@ -151,7 +156,7 @@ export function createDecryptStreamWithOffset(iv: Buffer, offset: number): Trans
         callback(error as Error);
       }
     },
-    flush(callback) {
+    flush(callback): void {
       try {
         const final = decipher.final();
         callback(null, final);
@@ -195,4 +200,14 @@ export function getStoragePath(storageName: string): string {
   const prefix1 = storageName.substring(0, 2);
   const secondChar = storageName.substring(2, 3);
   return `${prefix1}/${secondChar}${storageName}`;
+}
+
+export function getObjectIdBuffer(objectId: ObjectIdLike): Buffer {
+  if (objectId.id instanceof Buffer) {
+    return objectId.id;
+  }
+  if (objectId.id instanceof Uint8Array) {
+    return Buffer.from(objectId.id);
+  }
+  return Buffer.from(objectId.toString(), 'hex');
 }

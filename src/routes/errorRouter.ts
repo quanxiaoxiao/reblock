@@ -2,6 +2,7 @@ import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import crypto from 'crypto';
 import { logService } from '../services/logService';
+import type { LogFilter } from '../services/logService';
 import { IssueStatus, LogCategory, LogLevel, DataLossRisk } from '../models/logEntry';
 import { env } from '../config/env';
 import { createApiAuthMiddleware } from './middlewares/apiAuth';
@@ -111,6 +112,31 @@ const ErrorSchema = z.object({
   error: z.string(),
 });
 
+interface RuntimeErrorDetails {
+  errorId?: string;
+  requestId?: string;
+  path?: string;
+  method?: string;
+  errorMessage?: string;
+  errorName?: string;
+  stack?: string;
+  stackTrace?: string;
+  clientIp?: string;
+  headers?: Record<string, string>;
+  query?: Record<string, string>;
+  params?: Record<string, string>;
+  body?: unknown;
+  httpStatus?: number;
+}
+
+function toRuntimeErrorDetails(details: Record<string, unknown>): RuntimeErrorDetails {
+  return details as RuntimeErrorDetails;
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('not found');
+}
+
 const AuthHeadersSchema = z.object({
   authorization: z.string().optional().openapi({
     description: 'Bearer token for internal API authentication',
@@ -178,7 +204,7 @@ router.openapi(
     const includeResolvedBool = includeResolved === 'true';
     
     // Build filter - only RUNTIME_ERROR category
-    const filter: any = {
+    const filter: LogFilter = {
       category: LogCategory.RUNTIME_ERROR,
     };
     
@@ -189,7 +215,7 @@ router.openapi(
       filter.status = { $ne: IssueStatus.RESOLVED };
     }
     
-    const logFilter = {
+    const logFilter: LogFilter = {
       ...filter,
       path: path || undefined,
       method: method || undefined,
@@ -197,7 +223,7 @@ router.openapi(
       errorId: errorId || undefined,
       requestId: requestId || undefined,
       fingerprint: fingerprint || undefined,
-      sortOrder: order === 'asc' ? 'asc' : 'desc' as const,
+      sortOrder: order === 'asc' ? 'asc' : 'desc',
       limit: limitNum,
       offset: offsetNum,
     };
@@ -217,10 +243,12 @@ router.openapi(
     
     return c.json({
       total,
-      errors: paginatedErrors.map(e => ({
+      errors: paginatedErrors.map((e) => {
+        const details = toRuntimeErrorDetails(e.details);
+        return {
         _id: e._id,
-        errorId: (e.details as any).errorId,
-        requestId: e.context?.requestId || (e.details as any).requestId,
+        errorId: details.errorId,
+        requestId: e.context?.requestId ?? details.requestId,
         fingerprint: e.fingerprint,
         timestamp: e.timestamp,
         occurrenceCount: e.occurrenceCount,
@@ -230,20 +258,21 @@ router.openapi(
         category: e.category,
         status: e.status,
         details: {
-          errorId: (e.details as any).errorId,
-          requestId: (e.details as any).requestId || e.context?.requestId,
-          path: (e.details as any).path,
-          method: (e.details as any).method,
-          errorMessage: (e.details as any).errorMessage,
-          errorName: (e.details as any).errorName,
-          stack: (e.details as any).stack,
-          clientIp: (e.details as any).clientIp,
+          errorId: details.errorId,
+          requestId: details.requestId ?? e.context?.requestId,
+          path: details.path,
+          method: details.method,
+          errorMessage: details.errorMessage,
+          errorName: details.errorName,
+          stack: details.stack,
+          clientIp: details.clientIp,
         },
         suggestedAction: e.suggestedAction,
         resolvedAt: e.resolvedAt,
         resolution: e.resolution,
         resolvedBy: e.resolvedBy,
-      })),
+      };
+      }),
     });
   }
 );
@@ -346,7 +375,7 @@ router.openapi(
       return c.json({ error: 'Error not found' }, 404);
     }
     
-    const details = error.details as any;
+    const details = toRuntimeErrorDetails(error.details);
     
     const exportData = {
       errorId: details.errorId || id,
@@ -367,7 +396,7 @@ router.openapi(
       resolvedAt: error.resolvedAt,
       resolution: error.resolution,
       resolvedBy: error.resolvedBy,
-      fixedVersion: (error.context as any)?.serverVersion,
+      fixedVersion: error.context?.serverVersion,
     };
     
     return c.json(exportData);
@@ -433,8 +462,8 @@ router.openapi(
         success: true,
         message: `Error ${id} marked as resolved`,
       });
-    } catch (err: any) {
-      if (err.message.includes('not found')) {
+    } catch (err: unknown) {
+      if (isNotFoundError(err)) {
         return c.json({ error: 'Error not found' }, 404);
       }
       throw err;
@@ -503,8 +532,8 @@ router.openapi(
         success: true,
         message: `Error ${id} acknowledged`,
       });
-    } catch (err: any) {
-      if (err.message.includes('not found')) {
+    } catch (err: unknown) {
+      if (isNotFoundError(err)) {
         return c.json({ error: 'Error not found' }, 404);
       }
       throw err;

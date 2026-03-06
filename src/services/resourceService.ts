@@ -5,7 +5,7 @@ import { Resource, Block, Entry, ResourceHistory } from '../models';
 import type { IResource, IBlock, IResourceHistory } from '../models';
 import type { PaginatedResult } from './types';
 import { env } from '../config/env';
-import { generateStorageName, generateIV } from '../utils/crypto';
+import { generateStorageName, generateIV, getObjectIdBuffer } from '../utils/crypto';
 import { validatePagination } from '../utils/pagination';
 import { logService } from './logService';
 import { resourceCategoryService } from './resourceCategoryService';
@@ -157,7 +157,7 @@ export class ResourceService implements IResourceService {
     let auditContext: { fromBlockId?: string; toBlockId?: string; changedAt?: number } = {};
 
     try {
-      const applyMutation = async (sessionArg?: mongoose.ClientSession) => {
+      const applyMutation = async (sessionArg?: mongoose.ClientSession): Promise<void> => {
         const now = Date.now();
         const findOptions = sessionArg ? { session: sessionArg } : undefined;
         const saveOptions = sessionArg ? { session: sessionArg } : undefined;
@@ -522,7 +522,7 @@ export class ResourceService implements IResourceService {
     let result: IResource | null = null;
 
     try {
-      const applyDelete = async (sessionArg?: mongoose.ClientSession) => {
+      const applyDelete = async (sessionArg?: mongoose.ClientSession): Promise<void> => {
         const now = Date.now();
         const opts = sessionArg ? { session: sessionArg } : undefined;
 
@@ -695,8 +695,7 @@ export class ResourceService implements IResourceService {
     }
 
     // Generate IV from block._id (12 bytes → 16 bytes with padding)
-    const objectIdBuffer = (block._id as any).id || Buffer.from(block._id.toString(), 'hex');
-    const iv = generateIV(objectIdBuffer);
+    const iv = generateIV(getObjectIdBuffer(block._id));
 
     // Update lastAccessedAt - await to ensure consistency (per state-consistency rule)
     try {

@@ -116,26 +116,6 @@ function runCommand(command, args, options = {}) {
   });
 }
 
-async function fetchJson(url, options = {}) {
-  const response = await fetch(url, options);
-  const text = await response.text();
-  let json = null;
-  if (text) {
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = null;
-    }
-  }
-  return {
-    ok: response.ok,
-    status: response.status,
-    statusText: response.statusText,
-    json,
-    text,
-  };
-}
-
 async function waitForHealth(baseUrl, timeoutMs) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {

@@ -131,11 +131,19 @@ export class EntryRetentionService {
       limit: normalizedLimit,
       triggeredAt,
     };
+    const summaryDetails: Record<string, unknown> = {
+      scannedEntries: summary.scannedEntries,
+      expiredCandidates: summary.expiredCandidates,
+      deleted: summary.deleted,
+      failed: summary.failed,
+      limit: summary.limit,
+      triggeredAt: summary.triggeredAt,
+    };
 
     await logService.logAction({
       action: 'entry_retention_run_once',
       success: failed === 0,
-      details: summary,
+      details: summaryDetails,
       note: 'Entry retention scheduled cleanup completed',
       actor: 'retention-service',
     });

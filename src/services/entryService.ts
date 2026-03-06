@@ -149,8 +149,9 @@ export class EntryService implements IEntryService {
 
     try {
       return await entry.save();
-    } catch (err: any) {
-      if (err.code === 11000) {
+    } catch (err: unknown) {
+      const duplicateKeyError = err as { code?: number };
+      if (duplicateKeyError.code === 11000) {
         const existing = await Entry.findOne({ isDefault: true, isInvalid: { $ne: true } });
         if (existing) return existing;
       }
@@ -313,7 +314,7 @@ export class EntryService implements IEntryService {
     let updatedEntry: IEntry | null = null;
 
     try {
-      const applyDelete = async (sessionArg?: mongoose.ClientSession) => {
+      const applyDelete = async (sessionArg?: mongoose.ClientSession): Promise<void> => {
         const now = Date.now();
         const findOptions = sessionArg ? { session: sessionArg } : undefined;
         const saveOptions = sessionArg ? { session: sessionArg } : undefined;

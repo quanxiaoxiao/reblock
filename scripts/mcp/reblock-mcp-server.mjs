@@ -1331,8 +1331,7 @@ async function toolSyncDirectoriesToEntries(args = {}) {
   let succeeded = 0;
   let failed = 0;
 
-  for (let i = 0; i < directories.length; i += 1) {
-    const spec = directories[i] || {};
+  for (const spec of directories) {
     const sourceDir = String(spec.sourceDir || '');
     const folderBase = {
       sourceDir,
@@ -1382,7 +1381,7 @@ async function toolSyncDirectoriesToEntries(args = {}) {
       const folderJsonFile = resolve(reportDir, `${reportPrefix}.json`);
       const folderMarkdownFile = resolve(reportDir, `${reportPrefix}.md`);
 
-      const buildRes = await toolBuildLocalManifest({
+      await toolBuildLocalManifest({
         sourceDir: folderBase.sourceDirResolved,
         glob: spec.glob || '**/*',
         outputFile: manifestFile,

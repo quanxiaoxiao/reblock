@@ -9,11 +9,12 @@ import type { IBlock, IEntry, IResource, IUploadConfig } from '../models';
 import { env } from '../config/env';
 import { logService } from './logService';
 import { LogLevel, LogCategory, DataLossRisk } from '../models/logEntry';
-import { 
-  generateStorageName, 
-  generateIV, 
+import {
+  generateStorageName,
+  generateIV,
   createEncryptStream,
-  getStoragePath 
+  getStoragePath,
+  getObjectIdBuffer,
 } from '../utils/crypto';
 
 export class UploadBusinessError extends Error {
@@ -204,8 +205,7 @@ export class UploadService implements IUploadService {
         });
 
         // Creation successful → this is a new block, write the file
-        const objectIdBuffer = (block._id as any).id || Buffer.from(block._id.toString(), 'hex');
-        const iv = generateIV(objectIdBuffer);
+        const iv = generateIV(getObjectIdBuffer(block._id));
 
         await this.ensureDirectoryExists(path.dirname(blockPath));
 
@@ -225,9 +225,10 @@ export class UploadService implements IUploadService {
 
         return block;
 
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Check if this is a duplicate key error (code 11000)
-        if (error.code === 11000 && error.message?.includes('sha256')) {
+        const duplicateKeyError = error as { code?: number; message?: string };
+        if (duplicateKeyError.code === 11000 && duplicateKeyError.message?.includes('sha256')) {
           // Step 2: Block already exists, atomically increment linkCount
           const updated = await Block.findOneAndUpdate(
             { sha256, isInvalid: { $ne: true } },

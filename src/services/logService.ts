@@ -5,14 +5,12 @@ import { env } from '../config/env';
 import { validatePaginationOptionalLimit } from '../utils/pagination';
 import {
   LogEntry, 
-  ILogEntry, 
   LogLevel, 
   LogCategory, 
   IssueStatus, 
   DataLossRisk,
-  ILogContext,
-  IStatusHistoryEntry,
 } from '../models/logEntry';
+import type { ILogEntry, ILogContext, IStatusHistoryEntry } from '../models/logEntry';
 
 /**
  * LogService
@@ -80,7 +78,7 @@ export interface LogIssueParams {
   blockId?: string | Types.ObjectId | undefined;
   resourceIds?: (string | Types.ObjectId)[] | undefined;
   entryIds?: (string | Types.ObjectId)[] | undefined;
-  details: Record<string, any>;
+  details: Record<string, unknown>;
   suggestedAction: string;
   recoverable: boolean;
   dataLossRisk?: DataLossRisk | undefined;
@@ -92,8 +90,8 @@ export interface LogIssueParams {
 export interface LogCleanupActionParams {
   action: 'soft_delete' | 'fix_linkcount' | 'merge_blocks';
   targetBlockId: string;
-  previousState: Record<string, any>;
-  newState: Record<string, any>;
+  previousState: Record<string, unknown>;
+  newState: Record<string, unknown>;
   success: boolean;
   error?: string | undefined;
 }
@@ -104,7 +102,7 @@ export interface LogActionParams {
   blockId?: string | Types.ObjectId | undefined;
   resourceIds?: (string | Types.ObjectId)[] | undefined;
   entryIds?: (string | Types.ObjectId)[] | undefined;
-  details?: Record<string, any> | undefined;
+  details?: Record<string, unknown> | undefined;
   note?: string | undefined;
   actor?: string | undefined;
   requestId?: string | undefined;
@@ -261,7 +259,7 @@ export class LogService {
     });
 
     // Pre-compute file location so we only need a single save
-    const date = new Date().toISOString().split('T')[0]!;
+    const date = new Date().toISOString().slice(0, 10);
     const dir = getIssuesDir();
     const filePath = join(dir, `${date}.jsonl`);
     entry.fileLocation = { date, filePath };
@@ -608,7 +606,7 @@ export class LogService {
    */
   private async writeToFile(entry: ILogEntry, subdir: 'issues' | 'actions' | 'metrics'): Promise<void> {
     try {
-      const date = new Date().toISOString().split('T')[0]!;
+      const date = new Date().toISOString().slice(0, 10);
       const dir = subdir === 'issues' ? getIssuesDir() : subdir === 'actions' ? getActionsDir() : getMetricsDir();
       const filePath = join(dir, `${date}.jsonl`);
 
@@ -644,18 +642,26 @@ export class LogService {
    * Serialize log entry for file storage
    * Converts ObjectIds to strings for readability
    */
-  private serializeForFile(entry: ILogEntry): any {
-    const obj = entry.toObject();
+  private serializeForFile(entry: ILogEntry): Record<string, unknown> {
+    const obj = entry.toObject() as Record<string, unknown> & {
+      _id: { toString(): string };
+      blockId?: { toString(): string };
+      resourceIds?: Array<{ toString(): string }>;
+      entryIds?: Array<{ toString(): string }>;
+      actualState?: Record<string, unknown> & {
+        duplicateBlocks?: Array<{ toString(): string }>;
+      };
+    };
     
     return {
       ...obj,
       _id: obj._id.toString(),
       blockId: obj.blockId?.toString(),
-      resourceIds: obj.resourceIds?.map((id: any) => id.toString()),
-      entryIds: obj.entryIds?.map((id: any) => id.toString()),
+      resourceIds: obj.resourceIds?.map((id) => id.toString()),
+      entryIds: obj.entryIds?.map((id) => id.toString()),
       actualState: obj.actualState ? {
         ...obj.actualState,
-        duplicateBlocks: obj.actualState.duplicateBlocks?.map((id: any) => id.toString()),
+        duplicateBlocks: obj.actualState.duplicateBlocks?.map((id) => id.toString()),
       } : undefined,
     };
   }
@@ -759,12 +765,13 @@ export class LogService {
             const dateMatch = file.match(/^(\d{4})-(\d{2})-(\d{2})\.jsonl$/);
             if (!dateMatch) continue;
 
-            const fileDate = new Date(`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`).getTime();
+            const [, year = '', month = '', day = ''] = dateMatch;
+            const fileDate = new Date(`${year}-${month}-${day}`).getTime();
             
             // Check if file is older than threshold
             if (fileDate < archiveThreshold) {
               const sourcePath = join(dir, file);
-              const monthDir = join(getArchiveDir(), dateMatch[1]!, dateMatch[2]!);
+              const monthDir = join(getArchiveDir(), year, month);
               
               // Create month directory if not exists
               await mkdir(monthDir, { recursive: true });

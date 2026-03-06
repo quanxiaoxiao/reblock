@@ -8,14 +8,14 @@ export interface AuditOptions {
   getResourceId?: (c: Context) => string | undefined;
 }
 
-export const audit = (options: AuditOptions) => {
-  return async (c: Context, next: Next) => {
+export const audit = (options: AuditOptions): ((c: Context, next: Next) => Promise<void>) => {
+  return async (c: Context, next: Next): Promise<void> => {
     const requestId = crypto.randomUUID();
     c.set('requestId', requestId);
     c.set('auditStartTime', Date.now());
     
-    const clientIp = auditService.getClientIp(c as any);
-    const userAgent = c.req.header('user-agent') || undefined;
+    const clientIp = auditService.getClientIp(c);
+    const userAgent = c.req.header('user-agent') ?? undefined;
     const method = c.req.method;
     const path = c.req.path;
     
@@ -60,7 +60,7 @@ export const audit = (options: AuditOptions) => {
   };
 };
 
-export const auditMiddleware = async (c: Context, next: Next) => {
+export const auditMiddleware = async (c: Context, next: Next): Promise<void> => {
   const requestId = crypto.randomUUID();
   c.set('requestId', requestId);
   
