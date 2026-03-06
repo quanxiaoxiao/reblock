@@ -20,7 +20,7 @@ if (isTestRuntime) {
 }
 
 /** Helper: parse string to positive integer with pipe validation */
-const positiveInt = (defaultVal: string) =>
+const positiveInt = (defaultVal: string): z.ZodType<number> =>
   z.string().default(defaultVal).transform(Number).pipe(z.number().int().positive());
 
 

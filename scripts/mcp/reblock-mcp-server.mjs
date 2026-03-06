@@ -1340,7 +1340,7 @@ async function toolSyncDirectoriesToEntries(args = {}) {
       dryRun,
     };
 
-    let folderResult = null;
+    let folderResult;
     let entryAliasForReport = 'unknown';
 
     try {
