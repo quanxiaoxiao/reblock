@@ -1,0 +1,521 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://reblock.local/schemas/reblock-tool-call.schema.json",
+  "title": "Reblock MCP Tool Call",
+  "description": "Tool-call contract for the Reblock MCP server. Includes Phase 1 HTTP/error tools and Phase 2 upload/sync tools.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/runHurlSuiteCall"
+    },
+    {
+      "$ref": "#/$defs/runHurlCaseCall"
+    },
+    {
+      "$ref": "#/$defs/fetchOpenErrorsCall"
+    },
+    {
+      "$ref": "#/$defs/generateErrorReproCall"
+    },
+    {
+      "$ref": "#/$defs/resolveErrorCall"
+    },
+    {
+      "$ref": "#/$defs/buildLocalManifestCall"
+    },
+    {
+      "$ref": "#/$defs/planUploadSyncCall"
+    },
+    {
+      "$ref": "#/$defs/applyUploadSyncCall"
+    },
+    {
+      "$ref": "#/$defs/verifyUploadSyncCall"
+    },
+    {
+      "$ref": "#/$defs/syncDirectoriesToEntriesCall"
+    }
+  ],
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "baseCall": {
+      "type": "object",
+      "required": [
+        "tool",
+        "args"
+      ],
+      "properties": {
+        "tool": {
+          "type": "string"
+        },
+        "args": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "runHurlSuiteCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseCall"
+        },
+        {
+          "properties": {
+            "tool": {
+              "const": "run_hurl_suite"
+            },
+            "args": {
+              "type": "object",
+              "properties": {
+                "hurlEnv": {
+                  "type": "string",
+                  "default": "local"
+                },
+                "testPort": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535,
+                  "default": 4362
+                },
+                "apiToken": {
+                  "type": "string"
+                },
+                "serverLog": {
+                  "type": "string",
+                  "default": "/tmp/reblock-hurl-server.log"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "runHurlCaseCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseCall"
+        },
+        {
+          "properties": {
+            "tool": {
+              "const": "run_hurl_case"
+            },
+            "args": {
+              "type": "object",
+              "required": [
+                "hurlFile"
+              ],
+              "properties": {
+                "hurlFile": {
+                  "$ref": "#/$defs/nonEmptyString",
+                  "description": "Absolute or repo-relative hurl file path."
+                },
+                "baseUrl": {
+                  "type": "string",
+                  "default": "http://127.0.0.1:4362"
+                },
+                "apiToken": {
+                  "type": "string"
+                },
+                "hurlEnv": {
+                  "type": "string",
+                  "default": "local"
+                },
+                "timestamp": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "fetchOpenErrorsCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseCall"
+        },
+        {
+          "properties": {
+            "tool": {
+              "const": "fetch_open_errors"
+            },
+            "args": {
+              "type": "object",
+              "properties": {
+                "days": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 30,
+                  "default": 1
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "acknowledged",
+                    "resolved",
+                    "ignored"
+                  ],
+                  "default": "open"
+                },
+                "requestId": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 200,
+                  "default": 50
+                },
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 0
+                },
+                "baseUrl": {
+                  "type": "string"
+                },
+                "apiToken": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "generateErrorReproCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseCall"
+        },
+        {
+          "properties": {
+            "tool": {
+              "const": "generate_error_repro"
+            },
+            "args": {
+              "type": "object",
+              "properties": {
+                "errorId": {
+                  "type": "string"
+                },
+                "days": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 30,
+                  "default": 1
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "acknowledged",
+                    "resolved",
+                    "ignored"
+                  ],
+                  "default": "open"
+                },
+                "expectStatus": {
+                  "type": "integer",
+                  "minimum": 100,
+                  "maximum": 599
+                },
+                "output": {
+                  "type": "string"
+                },
+                "runImmediately": {
+                  "type": "boolean",
+                  "default": false
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "resolveErrorCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseCall"
+        },
+        {
+          "properties": {
+            "tool": {
+              "const": "resolve_error"
+            },
+            "args": {
+              "type": "object",
+              "required": [
+                "errorId",
+                "resolution"
+              ],
+              "properties": {
+                "errorId": {
+                  "$ref": "#/$defs/nonEmptyString"
+                },
+                "resolution": {
+                  "$ref": "#/$defs/nonEmptyString"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "buildLocalManifestCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseCall"
+        },
+        {
+          "properties": {
+            "tool": {
+              "const": "build_local_manifest"
+            },
+            "args": {
+              "type": "object",
+              "required": [
+                "sourceDir"
+              ],
+              "properties": {
+                "sourceDir": {
+                  "$ref": "#/$defs/nonEmptyString"
+                },
+                "glob": {
+                  "type": "string",
+                  "default": "**/*"
+                },
+                "outputFile": {
+                  "type": "string",
+                  "default": "analysis_output/upload-manifest.json"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "planUploadSyncCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseCall"
+        },
+        {
+          "properties": {
+            "tool": {
+              "const": "plan_upload_sync"
+            },
+            "args": {
+              "type": "object",
+              "required": [
+                "entryAlias",
+                "manifestFile"
+              ],
+              "properties": {
+                "entryAlias": {
+                  "$ref": "#/$defs/nonEmptyString"
+                },
+                "manifestFile": {
+                  "$ref": "#/$defs/nonEmptyString"
+                },
+                "outputFile": {
+                  "type": "string",
+                  "default": "analysis_output/upload-sync-plan.json"
+                },
+                "baseUrl": {
+                  "type": "string",
+                  "default": "http://127.0.0.1:4362"
+                },
+                "apiToken": {
+                  "type": "string"
+                },
+                "dryRun": {
+                  "type": "boolean",
+                  "default": true
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "applyUploadSyncCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseCall"
+        },
+        {
+          "properties": {
+            "tool": {
+              "const": "apply_upload_sync"
+            },
+            "args": {
+              "type": "object",
+              "required": [
+                "planFile",
+                "confirm"
+              ],
+              "properties": {
+                "planFile": {
+                  "$ref": "#/$defs/nonEmptyString"
+                },
+                "confirm": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "baseUrl": {
+                  "type": "string"
+                },
+                "apiToken": {
+                  "type": "string"
+                },
+                "concurrency": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 8,
+                  "default": 3
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "verifyUploadSyncCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseCall"
+        },
+        {
+          "properties": {
+            "tool": {
+              "const": "verify_upload_sync"
+            },
+            "args": {
+              "type": "object",
+              "required": [
+                "entryAlias"
+              ],
+              "properties": {
+                "entryAlias": {
+                  "$ref": "#/$defs/nonEmptyString"
+                },
+                "baseUrl": {
+                  "type": "string",
+                  "default": "http://127.0.0.1:4362"
+                },
+                "sampleSize": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100,
+                  "default": 20
+                },
+                "apiToken": {
+                  "type": "string"
+                },
+                "manifestFile": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "syncDirectoriesToEntriesCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseCall"
+        },
+        {
+          "properties": {
+            "tool": {
+              "const": "sync_directories_to_entries"
+            },
+            "args": {
+              "type": "object",
+              "required": [
+                "directories"
+              ],
+              "properties": {
+                "directories": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "sourceDir"
+                    ],
+                    "properties": {
+                      "sourceDir": {
+                        "$ref": "#/$defs/nonEmptyString"
+                      },
+                      "entryName": {
+                        "type": "string"
+                      },
+                      "entryAlias": {
+                        "type": "string"
+                      },
+                      "glob": {
+                        "type": "string",
+                        "default": "**/*"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "createEntryIfMissing": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "remotePolicy": {
+                  "type": "string",
+                  "enum": [
+                    "keep",
+                    "prune"
+                  ],
+                  "default": "keep"
+                },
+                "baseUrl": {
+                  "type": "string",
+                  "default": "http://127.0.0.1:4362"
+                },
+                "apiToken": {
+                  "type": "string"
+                },
+                "concurrency": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 8,
+                  "default": 3
+                },
+                "dryRun": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "reportDir": {
+                  "type": "string",
+                  "default": "analysis_output"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    }
+  }
+}

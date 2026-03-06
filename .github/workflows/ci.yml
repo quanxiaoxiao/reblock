@@ -62,6 +62,17 @@ jobs:
       - name: Check OpenAPI contract baseline
         run: npm run openapi:check
 
+      - name: Run MCP smoke test
+        run: npm run -s mcp:smoke -- --report-file analysis_output/ci-mcp-smoke.json
+
+      - name: Upload MCP smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-smoke-report
+          path: analysis_output/ci-mcp-smoke.json
+          if-no-files-found: warn
+
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:

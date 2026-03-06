@@ -1,0 +1,65 @@
+name: MCP E2E Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'
+
+env:
+  NODE_VERSION: '24'
+  NODE_ENV: test
+  PORT: '4362'
+  MONGO_HOSTNAME: 127.0.0.1
+  MONGO_PORT: '27017'
+  MONGO_DATABASE: reblock_mcp_e2e
+  ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+  API_AUTH_TOKEN: test-api-token
+  RETENTION_SCHEDULER_ENABLED: 'false'
+
+jobs:
+  mcp-e2e-sync:
+    name: MCP E2E Sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run MCP E2E Sync
+        run: npm run -s mcp:e2e-sync -- --base-url http://127.0.0.1:4362 --skip-build --report-file analysis_output/ci-mcp-e2e-sync.json --report-dir analysis_output --max-duplicate-names 0 --max-missing-sha 0 --max-missing-remote 0
+
+      - name: Upload MCP E2E report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-e2e-sync-report
+          path: |
+            analysis_output/ci-mcp-e2e-sync.json
+            analysis_output/sync-batch-*.json
+            analysis_output/sync-*.json
+            analysis_output/sync-*.md
+          if-no-files-found: warn
